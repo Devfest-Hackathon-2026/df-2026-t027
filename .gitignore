@@ -32,3 +32,7 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 *.log
+
+# このプロジェクトで足したもの
+key.txt
+.pytest_cache/

@@ -1,0 +1,1736 @@
+/* 色の決まり（使いやすさの改修の計画.md 7章）。主な色は落ち着いた青緑。
+   「急ぎ」は赤、「注意」は黄、「済み」は緑にそろえ、相談や期限の印に使う。
+   文字と背景の濃さの差は、白地の文字・主な色の上の白い文字とも 4.5 以上にする */
+:root {
+  --bg: #f2f6f6;
+  --surface: #ffffff;
+  --border: #d3dfe0;
+  --text: #16262b;
+  --muted: #4f636a;
+  --accent: #0b6b6b;
+  --accent-dark: #075252;
+  --accent-soft: #e0f0ef;
+  --focus: #e8a100;
+  --shadow: 0 1px 2px rgba(10, 45, 50, 0.06), 0 6px 16px rgba(10, 45, 50, 0.06);
+  --ok-bg: #e6f4ea;
+  --ok-text: #1b5e27;
+  --ng-bg: #fde2e2;
+  --ng-text: #7b1f1f;
+  --warn-bg: #fdf1d8;
+  --warn-text: #7a5312;
+  /* 中身の最大の幅。上のバー・タブのバーも同じ幅にそろえる（追加修正①） */
+  --page-max: 480px;
+}
+
+/* 画面の幅で作りを3つに分ける（画面の改修の計画.md 1章）。
+   - 768px 未満（スマートフォン）：中身は480pxまで。タブは下に固定
+   - 768〜1023px（タブレット）：中身は画面いっぱい（左右24px）。タブは下に、画面の幅いっぱいに並べる
+   - 1024px 以上（PC）：中身は1200pxまで。タブは左の縦のメニューにする
+   前は768px以上を720pxに止めて真ん中に集めていたが、PCでタブのバーと中身の左右に
+   何もない帯ができ、一覧も1列のままだった（2026-11-10 の要望） */
+@media (min-width: 768px) {
+  :root {
+    --page-max: 100%;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --page-max: 1200px;
+    /* 左の縦のメニューの幅と、上のバーの高さ（メニューの上の余白に使う） */
+    --sidebar: 220px;
+    --appbar-height: 56px;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* hidden 属性を必ず効かせる。`display: flex` などを後から足すと、
+   ブラウザの既定の `[hidden] { display: none }` に勝ってしまい、
+   隠したはずの欄が出てしまう（Step 4 で実際に起きた）。 */
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+  line-height: 1.7;
+}
+
+/* スマートフォン（360〜430px）を基準にする */
+.page {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+/* タブのバーが出ている間は、その高さだけ下の余白を増やす（要望3）。
+   タブのバー自体の高さ分（56px）＋ iPhone の下の safe area。 */
+body:has(#tabbar:not([hidden])) .page {
+  padding-bottom: calc(48px + 60px + env(safe-area-inset-bottom, 0px));
+}
+
+.title {
+  font-size: 1.5rem;
+  margin: 0 0 8px;
+}
+
+.note {
+  color: var(--muted);
+  margin: 0 0 24px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 16px;
+  box-shadow: var(--shadow);
+}
+
+/* カードの見出し。アイコン（icons.js）を前に置ける */
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.05rem;
+  margin: 0 0 12px;
+  color: var(--text);
+}
+
+.card-title .icon {
+  color: var(--accent);
+}
+
+/* カードの中の小見出し */
+.card-subtitle {
+  font-size: 0.9375rem;
+  margin: 16px 0 4px;
+}
+
+.status {
+  margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.status-checking {
+  background: var(--accent-soft);
+  color: var(--muted);
+}
+
+.status-ok {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+.status-ng {
+  background: var(--ng-bg);
+  color: var(--ng-text);
+}
+
+/* --- ここから Step 4（ログインと立場）--- */
+
+/* 上のバーに主な色を付ける（使いやすさの改修の計画.md 7章） */
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 6px 0;
+  background: var(--accent);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(10, 45, 50, 0.18);
+}
+
+/* 背景は画面いっぱい、中身は .page と同じ幅（追加修正①）。左右の余白も .page と同じ16px */
+.appbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.appbar-title {
+  /* 360pxの画面でボタン2つと並べるため、狭いときはアプリ名のほうを折り返す */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+.appbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* .link-button の上の余白（8px）のせいで、ログアウトがアプリ名より下にずれていた（追加修正①） */
+.appbar .link-button {
+  margin: 0;
+  padding: 0;
+  font-size: 0.9375rem;
+  white-space: nowrap;
+}
+
+/* アイコン（icons.js）。大きさは文字に合わせ、色は文字の色を使う */
+.icon {
+  width: 1.25em;
+  height: 1.25em;
+  flex-shrink: 0;
+  vertical-align: -0.25em;
+}
+
+[data-icon] {
+  display: inline-flex;
+}
+
+/* アイコンだけのボタン。押せる大きさは 44px 四方（使いやすさの改修の計画.md 2章） */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.icon-button:focus-visible,
+.appbar-button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* アイコンと文字のボタン（ログアウト） */
+.appbar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.appbar-button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* アイコンだけのボタンの処理中（文字を出す幅がないので、回る印にする） */
+.icon-button.is-busy .icon {
+  animation: icon-spin 1s linear infinite;
+  opacity: 0.6;
+}
+
+@keyframes icon-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon-button.is-busy .icon {
+    animation: none;
+  }
+}
+
+/* 360px前後の画面で、アプリ名とボタン2つを1行に収める（2026-11-10、360pxで「記録」だけが2行目に落ちた） */
+@media (max-width: 400px) {
+  .appbar-inner {
+    gap: 8px;
+  }
+
+  .appbar-actions {
+    gap: 4px;
+  }
+
+  .appbar-button {
+    padding: 0 10px;
+  }
+
+  .appbar-title {
+    font-size: 0.9375rem;
+  }
+
+  .appbar .link-button {
+    font-size: 0.875rem;
+  }
+}
+
+.card + .card,
+.card + .link-button,
+.form + .form {
+  margin-top: 16px;
+}
+
+.notice-box {
+  margin: 0 0 16px;
+  padding: 12px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.notice-ng {
+  background: var(--ng-bg);
+  color: var(--ng-text);
+}
+
+.notice-ok {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+/* 押せる大きさを確保する（訪問先でスマートフォンから使うため） */
+.button {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s, box-shadow 0.15s;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.button-primary {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(11, 107, 107, 0.25);
+}
+
+.button-primary:hover:not(:disabled) {
+  background: var(--accent-dark);
+}
+
+.button:focus-visible,
+.link-button:focus-visible,
+.choice:focus-visible,
+.tile:focus-visible,
+.tab:focus-visible,
+.chip:focus-visible,
+.row-button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.link-button {
+  min-height: 44px;
+  margin-top: 8px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 1rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* 戻るボタン（画面の改修の計画.md 4章）。右上のログアウトと同じく、枠付きの角の丸い形に
+   左向きの矢印と文字を並べる。幅は文字に合わせ、画面いっぱいにはしない */
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-top: 16px;
+  padding: 0 16px 0 12px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.back-button:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.back-button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* 戻るボタンが2つ続くとき（一覧に戻る・ホームに戻る）は横に並べる */
+.back-button:not([hidden]) + .back-button {
+  margin-left: 8px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-weight: 700;
+}
+
+/* 必須・任意の印（要望6）。HTML の required が付いているかで自動に決める。
+   手で書かないので、印と実際の入力チェックがずれない。
+   チェックの欄（.field-check）には付けない。チェックは「入れる・入れない」の
+   選択であり、空欄のまま進めない「必須の入力」とは性質が違うため。 */
+.field:not(.field-check) > .field-label::after {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  vertical-align: middle;
+  content: "任意";
+  background: #e8edf4;
+  color: var(--muted);
+}
+
+.field:not(.field-check):has(:required) > .field-label::after {
+  content: "必須";
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
+.field-note {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.field input,
+.field select {
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid #b9c9cb;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+}
+
+/* textarea も input と同じ見た目にする（F2・F3 の入力。開発手順書 Step 6-3）。
+   font-size を 1rem（16px）以上にしておくと、iPhone の Safari が入力のときに
+   画面を勝手に拡大しない。訪問先での入力で効く。 */
+.field textarea {
+  padding: 10px 12px;
+  border: 1px solid #b9c9cb;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.form-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--ng-bg);
+  color: var(--ng-text);
+  font-weight: 600;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px 16px;
+  border: 1px solid var(--border);
+  border-left: 6px solid var(--accent);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+.choice:hover {
+  background: var(--accent-soft);
+}
+
+.choice-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.choice-note {
+  color: var(--muted);
+}
+
+.pairs {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 8px 12px;
+  margin: 0;
+}
+
+.pairs dt {
+  color: var(--muted);
+}
+
+.pairs dd {
+  margin: 0;
+  font-weight: 600;
+  /* 途中で折り返せない長い文字列（出典のURLなど）があると、`1fr` の列がその幅まで広がり、
+     360px の画面からはみ出す（2026-11-09 に実測。scrollWidth 345px → 728px）。
+     `minmax(0, 1fr)` にしても直らない（文字が枠の外に描かれる）。
+     `break-word` は最小の幅を変えないため効かない。 */
+  overflow-wrap: anywhere;
+}
+
+.list {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.list li + li {
+  margin-top: 6px;
+}
+
+/* 見えない reCAPTCHA の置き場所（何も表示しない） */
+#recaptcha-container {
+  margin-top: 16px;
+}
+
+/* --- F1 被災者の記録と担当（開発手順書 Step 5） --- */
+
+/* 気をつけてほしい知らせ（二重登録のおそれなど） */
+.notice-warn {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
+/* ボタンを横に並べる。幅が足りなければ折り返す */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.actions .button,
+.actions .link-button,
+.actions .back-button {
+  margin: 0;
+}
+
+/* 絞り込み（スマートフォンでは縦に積む） */
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 一覧（カードを縦に並べる） */
+.cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cards .card {
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+/* カードの全体を押せるようにする（訪問先で指で押すため） */
+.row-button {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-height: 48px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row-button:hover,
+.row-button:focus-visible {
+  background: var(--accent-soft);
+}
+
+.row-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.row-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.row-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* 印（悪化の兆しの度合い・担当の状態） */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.badge-high,
+.badge-removed {
+  background: var(--ng-bg);
+  color: var(--ng-text);
+}
+
+.badge-medium,
+.badge-pending {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
+.badge-low,
+.badge-active {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+.badge-note {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+/* 担当の1行（名前・状態・ボタン） */
+.assignment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+}
+
+.assignment + .assignment {
+  border-top: 1px solid var(--border);
+}
+
+.assignment .button {
+  margin: 0;
+  min-height: 40px;
+  padding: 6px 12px;
+}
+
+/* 対応が必要な人の1行（名前・最後の訪問・次にすること。F4） */
+.attention {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0;
+}
+
+.attention + .attention {
+  border-top: 1px solid var(--border);
+}
+
+.attention .link-button {
+  align-self: flex-start;
+  margin: 0;
+}
+
+/* 確認コード（紙に書き写すので、大きく・読み違えないように出す） */
+.code-card {
+  text-align: center;
+}
+
+.code-display {
+  margin: 8px 0;
+  font-family: "SFMono-Regular", Consolas, "Courier New", monospace;
+  font-size: 2.4rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  word-break: break-all;
+}
+
+/* チェックの欄（横並びにする） */
+.field-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-check input {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+}
+
+/* 画面が広いときは絞り込みを横に並べる */
+@media (min-width: 600px) {
+  .filters {
+    flex-direction: row;
+  }
+
+  .filters .field {
+    flex: 1;
+  }
+}
+
+/* --- F2 訪問・見守りの記録（開発手順書 Step 6） --- */
+
+.visit {
+  padding: 12px 0;
+}
+
+.visit + .visit {
+  border-top: 1px solid var(--border);
+}
+
+.visit-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.visit-when {
+  font-weight: 700;
+}
+
+.visit .pairs {
+  margin: 0;
+}
+
+/* ご本人が書いた相談の文章（正本。いちばん上に、改行をそのまま出す。画面の改修の計画.md 6-2） */
+.consultation-raw {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.visit-raw {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+.visit-raw summary {
+  cursor: pointer;
+}
+
+/* 更新の案（反映するかを人が決める。要件定義書F2） */
+.proposal {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.proposal-title {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.proposal p {
+  margin: 0;
+}
+
+.proposal .list {
+  margin: 0;
+}
+
+/* --- F5 受け入れ先の施設・F3 引き継ぎシート（開発手順書 Step 9） --- */
+
+/* 施設の一覧の行（.cards .card の中に印と更新の欄を入れる） */
+.cards .card .proposal {
+  margin-top: 12px;
+}
+
+/* 引き継ぎシート（印刷してそのまま渡す） */
+.sheet .card-title {
+  margin-top: 16px;
+}
+
+.sheet-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 印刷（ブラウザの印刷でPDFにする。要件定義書F3）
+   - 操作のボタンと戻るリンクは紙に出さない（.no-print）
+   - 影・角丸・背景色をやめて、文字が読める形にする
+   - 幅の制限を外す（A4の紙幅を使う） */
+@media print {
+  .appbar,
+  .no-print,
+  #notice {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff;
+    line-height: 1.6;
+  }
+
+  .page {
+    max-width: none;
+    padding: 0;
+  }
+
+  .card {
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0;
+    background: #ffffff;
+  }
+
+  .title {
+    margin-top: 0;
+  }
+
+  .notice-box {
+    border: 1px solid #000000;
+    background: #ffffff;
+    color: #000000;
+  }
+
+  .pairs dt {
+    color: #000000;
+  }
+
+  .note,
+  .row-note {
+    color: #000000;
+  }
+}
+
+/* --- F6 受けられる支援と申請の状況（開発手順書 Step 10） --- */
+
+/* 支援・制度の1件（`.cards .card` は押せる行のために padding を 0 にしてあるので、
+   中身を直に並べるこのカードだけ余白を戻す） */
+.cards .support {
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.support .pairs {
+  margin-top: 8px;
+}
+
+.support .proposal {
+  margin-top: 12px;
+}
+
+/* 本人向けの画面は文字を大きくする（要件定義書F6「文字を大きくし」）。
+   画面に `.large-text` を付け外しするので、ほかの画面には影響しない。
+   入力の font-size は 1rem（16px）を下回らせない（iPhone の Safari が拡大するため）。 */
+.large-text {
+  font-size: 1.15rem;
+}
+
+.large-text .title {
+  font-size: 1.75rem;
+}
+
+.large-text .card-title {
+  font-size: 1.3rem;
+  color: var(--text);
+}
+
+.large-text .card-subtitle,
+.large-text .row-title,
+.large-text .field-label {
+  font-size: 1.2rem;
+}
+
+.large-text .note,
+.large-text .row-note,
+.large-text .pairs dt,
+.large-text .pairs dd {
+  font-size: 1.05rem;
+}
+
+.large-text .notice-box {
+  font-size: 1.1rem;
+}
+
+.large-text input,
+.large-text select,
+.large-text textarea,
+.large-text .button,
+.large-text .link-button {
+  font-size: 1.15rem;
+}
+
+/* 項目の名前が長くなるので、狭い画面では上下に並べる */
+.large-text .pairs {
+  grid-template-columns: 1fr;
+  gap: 2px 0;
+}
+
+.large-text .pairs dd {
+  margin-bottom: 8px;
+}
+
+/* --- ホームのタブのバー（要望3） --- */
+
+/* いつでも画面の下に固定する。登録が済んだ後だけ出す（`hidden` を app.js が外す）。
+   スマートフォンで親指が届く位置（iPhone の下の安全な領域に重ならないようにする）。 */
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  /* タブは画面の幅いっぱいに等しく並べる。左右の余白で真ん中に集めると、広い画面で
+     左右に何もない帯ができた（画面の改修の計画.md 1章）。PC は下の @media で左のメニューにする */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* タブはアイコンと短い言葉（使いやすさの改修の計画.md 7章） */
+.tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 60px;
+  padding: 6px 2px;
+  border: 0;
+  border-top: 3px solid transparent;
+  background: none;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+}
+
+.tab .icon {
+  width: 24px;
+  height: 24px;
+}
+
+.tab.active {
+  color: var(--accent);
+  border-top-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+@media print {
+  .tabbar {
+    display: none !important;
+  }
+}
+
+/* 入力ではなく、記録の値を見せるだけの欄（使いやすさの改修の計画.md 6-4） */
+.field-value {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+/* ===== 使いやすさの改修（使いやすさの改修の計画.md 4章・7章） ===== */
+
+/* 見出し（カードの外）。ホームの「専門職のホーム」など */
+.section-title {
+  margin: 20px 0 4px;
+  font-size: 1.15rem;
+}
+
+/* 知らせ：「保存しました」などを画面の下に浮かべる（4-2の4）。下のタブの上に出す */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(calc(100% - 32px), var(--page-max));
+  margin: 0;
+  padding: 10px 6px 10px 16px;
+  border-radius: 12px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(10, 45, 50, 0.22);
+  transform: translateX(-50%);
+}
+
+body:has(#tabbar:not([hidden])) .toast {
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+
+.toast #notice-text {
+  flex: 1;
+  white-space: pre-line;
+}
+
+.toast-close {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.toast.notice-ok {
+  background: var(--ok-text);
+  color: #ffffff;
+}
+
+.toast.notice-ng {
+  background: var(--ng-text);
+  color: #ffffff;
+}
+
+.toast.notice-warn {
+  background: #5a3d0a;
+  color: #ffffff;
+}
+
+/* 画面の中の知らせの枠は、左に色の線を付けて種類を分かりやすくする */
+.notice-box {
+  border-left: 5px solid transparent;
+}
+
+.notice-box.notice-ng {
+  border-left-color: #b3261e;
+}
+
+.notice-box.notice-ok {
+  border-left-color: #2e7d32;
+}
+
+.notice-box.notice-warn {
+  border-left-color: #c48a00;
+}
+
+.notice-box p {
+  margin: 0 0 8px;
+}
+
+/* 欄ごとの入力の誤り（4-2の2） */
+.field-error {
+  color: var(--ng-text);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.field-error::before {
+  content: "！ ";
+}
+
+.field-invalid input,
+.field-invalid select,
+.field-invalid textarea {
+  border-color: #b3261e;
+  border-width: 2px;
+  background: #fff8f7;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+/* 確かめの枠（4-2の6） */
+.dialog {
+  width: min(calc(100% - 32px), 440px);
+  padding: 24px 20px 20px;
+  border: 0;
+  border-radius: 16px;
+  box-shadow: 0 16px 48px rgba(10, 45, 50, 0.3);
+  color: var(--text);
+}
+
+.dialog::backdrop {
+  background: rgba(10, 30, 35, 0.45);
+}
+
+.dialog-message {
+  margin: 0 0 20px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.dialog-actions .button {
+  flex: 1;
+}
+
+.button-danger {
+  background: #b3261e;
+  border-color: #b3261e;
+  color: #ffffff;
+}
+
+.button-danger:hover:not(:disabled) {
+  background: #8c1d17;
+}
+
+/* ホームの挨拶のカード（7章） */
+.hero {
+  margin: 0 0 16px;
+  padding: 20px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--accent) 0%, #138a7f 100%);
+  color: #ffffff;
+  box-shadow: var(--shadow);
+}
+
+.hero-hello {
+  margin: 0;
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+
+.hero-name {
+  margin: 2px 0 6px;
+  font-size: 1.5rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.hero-honorific {
+  margin-left: 4px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.hero-meta {
+  margin: 0;
+  font-size: 0.95rem;
+  opacity: 0.95;
+}
+
+.hero-sep {
+  margin: 0 4px;
+  opacity: 0.7;
+}
+
+/* ホームの入口のタイル（4-2の5）。2列に並べ、対応が要る数を右上に出す */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 20px;
+}
+
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 108px;
+  padding: 16px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: left;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.tile:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.tile:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.tile-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tile-icon .icon {
+  width: 26px;
+  height: 26px;
+}
+
+.tile-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.tile-primary:hover:not(:disabled) {
+  background: var(--accent-dark);
+}
+
+.tile-primary .tile-icon {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.tile-count {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  min-width: 26px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #b3261e;
+  color: #ffffff;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+/* 読み込み中の形（4-2の7） */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  list-style: none;
+}
+
+.skeleton-line {
+  display: block;
+  width: 55%;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #e3ebec 0%, #f1f5f5 50%, #e3ebec 100%);
+  background-size: 200% 100%;
+  animation: skeleton-wave 1.2s ease-in-out infinite;
+}
+
+.skeleton-line-wide {
+  width: 85%;
+  height: 14px;
+}
+
+@keyframes skeleton-wave {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line {
+    animation: none;
+  }
+}
+
+/* 文字の大きさ「大きい」（4-2の8）。rem で書いた大きさがまとめて大きくなる */
+html.text-large {
+  font-size: 112.5%;
+}
+
+.segmented {
+  display: flex;
+  gap: 8px;
+}
+
+.segmented-item {
+  flex: 1;
+}
+
+.segmented-item input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segmented-item span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  color: var(--accent);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.segmented-item input:checked + span {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.segmented-item input:focus-visible + span {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ログインの方法の一覧（1章） */
+.method-list {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.method {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+}
+
+.method + .method {
+  border-top: 1px solid var(--border);
+}
+
+.method .icon {
+  color: var(--muted);
+}
+
+.method-linked .icon {
+  color: var(--ok-text);
+}
+
+.method-name {
+  flex: 1;
+  font-weight: 700;
+}
+
+/* 前回のログインの方法のカードを目立たせる（1章） */
+.card.login-last {
+  border: 2px solid var(--accent);
+}
+
+.choice-relogin {
+  margin-top: 24px;
+}
+
+.choice-last-login {
+  font-weight: 700;
+}
+
+/* 空のときの表示（7章） */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 8px;
+  color: var(--muted);
+  text-align: center;
+  list-style: none;
+}
+
+.empty-state .icon {
+  width: 32px;
+  height: 32px;
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+/* 絞り込みのボタン（11章の期日など） */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.chip {
+  min-height: 40px;
+  padding: 6px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+/* 登録の段の印（4-2の3） */
+.steps {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  flex: 1;
+  padding: 6px 8px;
+  border-bottom: 4px solid var(--border);
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.step.step-current {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+}
+
+.step.step-done {
+  border-bottom-color: #7fb8b4;
+}
+
+/* 支援の画面（使いやすさの改修の計画.md 6-2）。タブの下に余白を取り、出典の長いURLは折り返す */
+#screen-programs .segmented {
+  margin: 0 0 16px;
+}
+
+.program-more {
+  margin-top: 8px;
+}
+
+.program-more summary {
+  min-height: 44px;
+  padding: 8px 0;
+  color: var(--accent);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.source-link {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+/* 声で入力する（13章）。ボタンは文章の欄のすぐ下に置き、聞いている間は色を変える */
+.voice-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: auto;
+  min-width: 140px;
+}
+
+.voice-button.voice-on {
+  background: var(--ng-bg);
+  border-color: var(--ng-text);
+  color: var(--ng-text);
+}
+
+@media print {
+  .toast,
+  .dialog {
+    display: none !important;
+  }
+}
+
+/* 施設の職員（使いやすさの改修の計画.md 9章）。手袋をしていても押せるよう、ボタンを大きくする */
+.facility-staff-card .card-title {
+  margin-top: 8px;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stepper-button {
+  flex: 0 0 72px;
+  width: 72px;
+  min-height: 72px;
+  padding: 0;
+  border-radius: 16px;
+}
+
+.stepper-button .icon {
+  width: 32px;
+  height: 32px;
+}
+
+.stepper-value {
+  flex: 1;
+  font-size: 2.6rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toggle {
+  display: inline-flex;
+  flex: 1 1 140px;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 8px 14px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.toggle .toggle-mark,
+.toggle .toggle-mark .icon,
+.toggle > .toggle-mark {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  visibility: hidden;
+}
+
+.toggle[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+.toggle[aria-pressed="true"] .toggle-mark,
+.toggle[aria-pressed="true"] .toggle-mark .icon {
+  visibility: visible;
+}
+
+.toggle:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.button-large {
+  min-height: 60px;
+  font-size: 1.15rem;
+}
+
+/* --- 広い画面の作り（画面の改修の計画.md 1章・2章） ---
+   スマートフォン（768px 未満）の見た目は変えない。印刷には効かせない（screen だけ） */
+
+/* 入力の画面は、広い画面でも読みやすい幅に止める（1行が長いと読みにくく、入れにくい）。
+   記録の詳しい画面のように、カードを縦に読む画面は少し広く止める */
+.screen-narrow,
+.screen-medium {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.screen-narrow {
+  max-width: 640px;
+}
+
+.screen-medium {
+  max-width: 880px;
+}
+
+/* 0件などの知らせの行は、格子の1マスに押し込まず、全部の列を使う */
+.cards > .note,
+.cards > .skeleton {
+  grid-column: 1 / -1;
+}
+
+@media screen and (min-width: 768px) {
+  .page {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .appbar-inner {
+    padding: 0 24px;
+  }
+
+  /* 横に並べるボタン（.actions）は、広い画面では文字に合わせた幅にする。
+     画面いっぱいの横長のボタンは、押す場所が分かりにくい */
+  .actions .button {
+    width: auto;
+    min-width: 160px;
+  }
+
+  /* ホームのタイルは、幅に合わせて1行に3〜4個並べる */
+  .tiles {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+
+  /* 一覧（.cards）は格子にして2〜3列に並べる（2章）。同じ行のカードは高さをそろえる */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 12px;
+  }
+
+  .cards .card {
+    margin: 0;
+  }
+
+  .cards .card > .row-button {
+    height: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media screen and (min-width: 1024px) {
+  /* 上のバーは画面いっぱいに使う。アプリ名は左のメニューの上、ボタンは右端に置く */
+  .appbar-inner {
+    max-width: none;
+  }
+
+  /* 下のタブを、左の縦のメニューにする（HTML は変えない）。
+     上のバー（z-index 20）の下に潜らせ、バーの高さの分だけ上を空ける */
+  .tabbar {
+    top: 0;
+    right: auto;
+    width: var(--sidebar);
+    flex-direction: column;
+    gap: 4px;
+    padding: calc(var(--appbar-height) + 16px) 12px 16px;
+    border-top: 0;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+  }
+
+  .tab {
+    flex: 0 0 auto;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    min-height: 48px;
+    padding: 10px 14px;
+    border-top: 0;
+    border-left: 3px solid transparent;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    text-align: left;
+  }
+
+  .tab.active {
+    border-left-color: var(--accent);
+  }
+
+  /* メニューが出ている間は、中身をメニューの右に置き、残りの幅の真ん中にそろえる。
+     下のタブの高さの分の余白は要らなくなる */
+  body:has(#tabbar:not([hidden])) .page {
+    width: min(var(--page-max), calc(100% - var(--sidebar)));
+    max-width: none;
+    margin-left: calc(
+      var(--sidebar) + (100% - var(--sidebar) - min(var(--page-max), calc(100% - var(--sidebar)))) / 2
+    );
+    margin-right: 0;
+    padding-bottom: 48px;
+  }
+
+  /* 知らせは、中身の真ん中の下に出す */
+  .toast {
+    width: min(calc(100% - 32px), 560px);
+  }
+
+  body:has(#tabbar:not([hidden])) .toast {
+    left: calc(var(--sidebar) + (100% - var(--sidebar)) / 2);
+    bottom: 24px;
+  }
+}

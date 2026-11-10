@@ -1,0 +1,20 @@
+# 秘密情報（Cloud Run には --set-env-vars で渡す）
+.env
+*.key
+
+# アプリに要らないもの（開発手順書6-1）
+.venv
+.git
+.gitignore
+01_docs
+03_sql
+04_scripts
+05_tests
+
+# ローカルの作業の残り
+__pycache__
+*.pyc
+.pytest_cache
+Dockerfile
+.dockerignore
+README.md

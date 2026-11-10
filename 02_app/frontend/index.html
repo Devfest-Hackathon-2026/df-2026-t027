@@ -1,0 +1,1888 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>被災者支援つなぎ記録</title>
+    <!-- 印を指しておかないと、ブラウザが /favicon.ico を取りに行って 404 になる -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="appbar">
+      <!-- 中身（.page）と同じ幅にそろえる入れ物（追加修正①）。右上にプロフィールとログアウト（追加修正⑧） -->
+      <div class="appbar-inner">
+        <span class="appbar-title"><span data-icon="heart"></span>被災者支援つなぎ記録</span>
+        <div class="appbar-actions">
+          <!-- 文字のリンクではなく、アイコンのボタンにする（使いやすさの改修の計画.md 2章） -->
+          <button
+            id="appbar-profile"
+            type="button"
+            class="icon-button"
+            aria-label="プロフィール"
+            title="プロフィール"
+            hidden
+          >
+            <span data-icon="user"></span>
+          </button>
+          <!-- 押し間違えると困るので、ログアウトは文字も残す -->
+          <button id="sign-out" type="button" class="appbar-button" title="ログアウト" hidden>
+            <span data-icon="log-out"></span><span class="appbar-button-label">ログアウト</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <!-- 知らせは画面の下に浮かべて出す（使いやすさの改修の計画.md 4-2の4。ui.js の showNotice） -->
+      <div id="notice" class="toast" role="status" aria-live="polite" hidden>
+        <span id="notice-text"></span>
+        <button id="notice-close" type="button" class="icon-button toast-close" aria-label="閉じる">
+          <span data-icon="x"></span>
+        </button>
+      </div>
+
+      <!-- 読み込み中 -->
+      <section id="screen-loading" class="screen">
+        <p class="status status-checking">読み込んでいます…</p>
+      </section>
+
+      <!-- 1. ログイン（未ログインではこの画面だけを出す。要件定義書F0） -->
+      <section id="screen-login" class="screen screen-narrow" hidden>
+        <h1 class="title">ログイン</h1>
+        <p class="note">はじめての方も、ここからお進みください。</p>
+        <!-- 前回のログインの方法（使いやすさの改修の計画.md 1章。この端末に覚えた名前だけ） -->
+        <p id="login-last-method" class="notice-box notice-ok" hidden></p>
+
+        <div class="card" data-login-method="google">
+          <h2 class="card-title">Google でログイン</h2>
+          <button id="login-google" type="button" class="button button-primary">
+            Google でログイン
+          </button>
+        </div>
+
+        <div class="card" data-login-method="phone">
+          <h2 class="card-title">電話番号でログイン</h2>
+          <form id="form-phone" class="form" novalidate>
+            <label class="field">
+              <span class="field-label">電話番号</span>
+              <input
+                id="phone-number"
+                type="tel"
+                inputmode="tel"
+                autocomplete="tel"
+                placeholder="09012345678"
+                required
+              />
+            </label>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button">確認コードを送る</button>
+          </form>
+
+          <form id="form-phone-code" class="form" hidden novalidate>
+            <p class="note">届いた6桁の番号を入れてください。</p>
+            <label class="field">
+              <span class="field-label">確認コード</span>
+              <input
+                id="phone-code"
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="6"
+                required
+              />
+            </label>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button button-primary">ログイン</button>
+            <button id="phone-restart" type="button" class="link-button">
+              電話番号を入れ直す
+            </button>
+          </form>
+        </div>
+        <div id="recaptcha-container"></div>
+      </section>
+
+      <!-- 2. 初回の選択（F0） -->
+      <section id="screen-choice" class="screen screen-narrow" hidden>
+        <h1 class="title">どちらで使いますか</h1>
+        <p class="note">選んだあとに登録の画面が出ます。</p>
+        <div class="choices">
+          <button id="choose-survivor" type="button" class="choice">
+            <span class="choice-title"><span data-icon="heart"></span>支援を受けたい</span>
+            <span class="choice-note">自分の記録を作ります（被災された本人の方）</span>
+          </button>
+          <button id="choose-supporter" type="button" class="choice">
+            <span class="choice-title"><span data-icon="users"></span>支援をする</span>
+            <span class="choice-note"
+              >配られた参加コードを入れます（専門職・ボランティア・ご家族・施設の職員）</span
+            >
+          </button>
+        </div>
+        <!-- 別のログインの方法で入ると、はじめての人として扱われる（使いやすさの改修の計画.md 1章） -->
+        <div class="notice-box notice-warn choice-relogin">
+          <p>
+            前に登録したのにこの画面が出た方は、前と違う方法でログインしている可能性があります。
+            Google と電話番号は、別の利用者として扱われます。前と同じ方法でログインし直してください。
+          </p>
+          <p id="choice-last-login" class="choice-last-login" hidden></p>
+          <button id="choice-relogin" type="button" class="button">
+            ログアウトして、別の方法で入る
+          </button>
+        </div>
+      </section>
+
+      <!-- 3. 本人の登録（F0・F1） -->
+      <section id="screen-survivor-self" class="screen screen-narrow" hidden>
+        <h1 class="title">ご本人の登録</h1>
+        <!-- 2つの段に分ける（使いやすさの改修の計画.md 4-2の3）。1段目はお住まいとお名前だけ -->
+        <ol class="steps" aria-label="登録の段">
+          <li id="survivor-step-mark-1" class="step step-current">1. お住まいとお名前</li>
+          <li id="survivor-step-mark-2" class="step">2. いまの状況</li>
+        </ol>
+        <form id="form-survivor" class="form card" novalidate>
+          <div id="survivor-step-1" class="form form-step">
+          <label class="field">
+            <span class="field-label">お住まいの都道府県</span>
+            <input
+              id="survivor-prefecture-filter"
+              type="text"
+              autocomplete="off"
+              placeholder="文字で絞り込めます（例：いしかわ）"
+            />
+            <select id="survivor-prefecture" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">お住まいの市区町村</span>
+            <input
+              id="survivor-municipality-filter"
+              type="text"
+              autocomplete="off"
+              placeholder="文字で絞り込めます（例：わじま）"
+            />
+            <select id="survivor-municipality" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">お名前</span>
+            <input id="survivor-name" type="text" autocomplete="name" required />
+          </label>
+          <p class="form-error" hidden></p>
+          <button id="survivor-step-next" type="button" class="button button-primary">次へ</button>
+          </div>
+          <div id="survivor-step-2" class="form form-step" hidden>
+          <label class="field">
+            <span class="field-label">今の段階</span>
+            <select id="survivor-stage" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">今いる場所</span>
+            <select id="survivor-location-type" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">場所の名前</span>
+            <input id="survivor-location-detail" type="text" placeholder="避難所名・地区など" />
+          </label>
+          <label class="field">
+            <span class="field-label">年齢</span>
+            <input id="survivor-age" type="number" inputmode="numeric" min="0" max="120" />
+            <span class="field-note">あとからプロフィールで入れられます。</span>
+          </label>
+          <label class="field">
+            <span class="field-label">世帯の人数（ご自分を含む）</span>
+            <input id="survivor-household" type="number" inputmode="numeric" min="1" max="30" />
+            <span class="field-note">受けられる支援を調べるのに使います。あとからでも入れられます。</span>
+          </label>
+          <label class="field">
+            <span class="field-label">連絡先</span>
+            <input id="survivor-contact" type="text" placeholder="電話番号など" />
+          </label>
+          <label class="field">
+            <span class="field-label">住所</span>
+            <input id="survivor-address" type="text" placeholder="町名・番地など" />
+          </label>
+          <!-- 支援の組織（追加修正⑦）。空のままでも登録できる（required を付けない） -->
+          <label class="field">
+            <span class="field-label">支援の組織</span>
+            <span class="field-note">
+              選んだ組織の専門職（保健師・相談員など）に、あなたの記録（健康・介護の情報を含む）が
+              見えるようになります。空のままでも登録でき、あとからプロフィールで選び直せます。
+            </span>
+            <input
+              id="survivor-org-filter"
+              type="text"
+              autocomplete="off"
+              placeholder="組織の名前で探せます"
+            />
+            <select id="survivor-org"></select>
+            <span id="survivor-org-note" class="field-note"></span>
+          </label>
+          <p class="form-error" hidden></p>
+          <button type="submit" class="button button-primary">登録する</button>
+          <button id="survivor-step-back" type="button" class="back-button"><span data-icon="arrow-left"></span><span>1つ前に戻る</span></button>
+          </div>
+        </form>
+
+        <div class="card">
+          <h2 class="card-title">支援者やご家族から確認コードを受け取っている方</h2>
+          <p class="note">
+            すでに作られている記録とつなぎます。ご家族が代わりに登録した記録も、このコードでつながります。
+          </p>
+          <form id="form-link-code" class="form" novalidate>
+            <label class="field">
+              <span class="field-label">確認コード</span>
+              <input id="link-code" type="text" autocapitalize="characters" required />
+            </label>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button">つなぐ</button>
+          </form>
+        </div>
+        <button class="link-button back-to-choice" type="button">戻る</button>
+      </section>
+
+      <!-- 4. 支援者の登録（F0） -->
+      <section id="screen-supporter" class="screen screen-narrow" hidden>
+        <h1 class="title">支援者の登録</h1>
+        <form id="form-supporter" class="form card" novalidate>
+          <label class="field">
+            <span class="field-label">参加コード</span>
+            <input id="supporter-code" type="text" autocapitalize="characters" />
+            <span class="field-note">
+              所属する組織から配られたコードです。施設の職員の方は、施設の参加コードを入れてください。
+              お持ちでない方は空のままで登録できます（あとから「組織に入る」「組織を作る」から入れます）。
+            </span>
+          </label>
+          <label class="field">
+            <span class="field-label">表示名</span>
+            <input id="supporter-name" type="text" autocomplete="name" required />
+          </label>
+          <label class="field">
+            <span class="field-label">職種</span>
+            <select id="supporter-profession" required></select>
+            <span class="field-note"
+              >専門職（保健師・ケアマネジャー・相談員）でない方は「該当なし」を選んでください。</span
+            >
+          </label>
+          <label class="field">
+            <span class="field-label">連絡先</span>
+            <input id="supporter-contact" type="tel" autocomplete="tel" placeholder="電話番号など" required />
+            <span class="field-note">担当の相談員から連絡するときに使います。ご本人やほかの支援者には見えません。</span>
+          </label>
+          <label class="field">
+            <span class="field-label">活動する都道府県</span>
+            <input
+              id="supporter-prefecture-filter"
+              type="text"
+              autocomplete="off"
+              placeholder="文字で絞り込めます（例：いしかわ）"
+            />
+            <select id="supporter-prefecture" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">活動する市区町村</span>
+            <input
+              id="supporter-municipality-filter"
+              type="text"
+              autocomplete="off"
+              placeholder="文字で絞り込めます（例：わじま）"
+            />
+            <select id="supporter-municipality" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">住所</span>
+            <input
+              id="supporter-address"
+              type="text"
+              autocomplete="street-address"
+              placeholder="町名・番地など"
+              required
+            />
+            <span class="field-note">担当の相談員から連絡するときにだけ使います。ご本人やほかの支援者には見えません。</span>
+          </label>
+          <p class="form-error" hidden></p>
+          <button type="submit" class="button button-primary">登録する</button>
+        </form>
+        <button class="link-button back-to-choice" type="button">戻る</button>
+      </section>
+
+      <!-- 5. ホーム（立場ごとに切り替える。F0） -->
+      <section id="screen-home" class="screen screen-medium" hidden>
+        <!-- 挨拶のカード（使いやすさの改修の計画.md 7章）。お名前・立場・組織をまとめる -->
+        <div class="hero">
+          <p class="hero-hello">こんにちは</p>
+          <h1 class="hero-name"><span id="home-name"></span><span class="hero-honorific">さん</span></h1>
+          <p class="hero-meta">
+            <span id="home-role"></span><span class="hero-sep">／</span><span id="home-org"></span>
+          </p>
+        </div>
+        <h2 id="home-title" class="section-title"></h2>
+        <p id="home-subtitle" class="note"></p>
+        <!-- 追加修正④より前に登録した支援者に、新しい必須の項目を入れてもらう案内 -->
+        <div id="home-profile-notice" class="notice-box notice-warn" hidden>
+          <p>連絡先・活動する市区町村・住所のどれかが、まだ入っていません。プロフィールから入れてください。</p>
+          <button id="home-profile-notice-open" type="button" class="button">プロフィールを開く</button>
+        </div>
+        <!-- 期限が3日以内の未申請の支援（ご本人だけ。使いやすさの改修の計画.md 11-2。programs.js が出す） -->
+        <div id="home-deadline-banner" class="notice-box notice-warn" role="status" hidden>
+          <p id="home-deadline-banner-text"></p>
+          <button id="home-deadline-banner-open" type="button" class="button">支援を見る</button>
+        </div>
+        <!-- ホームの入口はタイルにする（使いやすさの改修の計画.md 4-2の5。app.js が作る） -->
+        <div id="home-actions" class="tiles"></div>
+
+        <!-- 対応が必要な人（F4。支援者だけ。本人には出さない） -->
+        <div class="card" id="home-attention-card" hidden>
+          <h2 class="card-title">対応が必要な人</h2>
+          <p id="home-attention-count" class="note"></p>
+          <ul id="home-attention" class="list"></ul>
+          <p id="home-attention-note" class="note"></p>
+          <button id="home-attention-reload" type="button" class="button">読み直す</button>
+        </div>
+
+        <!-- 新しい相談（F8。専門職だけ。急ぎの順・未対応から） -->
+        <div class="card" id="home-consultations-card" hidden>
+          <h2 class="card-title">ご本人からの相談</h2>
+          <p id="home-consultations-count" class="note"></p>
+          <ul id="home-consultations" class="list"></ul>
+          <button id="home-consultations-reload" type="button" class="button">読み直す</button>
+        </div>
+
+        <!-- 公開の相談（追加修正②。組織につながっていないご本人の相談。支援者全員が見る） -->
+        <div class="card" id="home-public-consultations-card" hidden>
+          <h2 class="card-title">組織につながっていない方からの相談</h2>
+          <p class="note">
+            どの組織にもつながっていない方の相談です。お名前は出ません。返事を書けるのは専門職だけです。
+          </p>
+          <p id="home-public-consultations-count" class="note"></p>
+          <ul id="home-public-consultations" class="list"></ul>
+          <button id="home-public-consultations-reload" type="button" class="button">読み直す</button>
+        </div>
+
+        <!-- 期限が近い未申請の支援（F6。専門職だけ。一覧と同じ応答から作る） -->
+        <div class="card" id="home-support-alerts-card" hidden>
+          <h2 class="card-title"><span data-icon="calendar"></span>期限が近い未申請の支援</h2>
+          <!-- 期日で絞り込む（使いやすさの改修の計画.md 11章。f6.js が作る） -->
+          <div id="home-support-alerts-filters" class="chips" role="group" aria-label="期限で絞り込む"></div>
+          <p id="home-support-alerts-count" class="note"></p>
+          <ul id="home-support-alerts" class="list"></ul>
+          <p id="home-support-alerts-note" class="note"></p>
+        </div>
+
+        <!-- 周りの地域の状況（使いやすさの改修の計画.md 8章）。全員に出す。disaster.js が読む -->
+        <div class="card" id="home-disaster-card" hidden>
+          <h2 class="card-title"><span data-icon="map-pin"></span>周りの地域の状況</h2>
+          <p id="home-disaster-area" class="note"></p>
+          <div id="home-disaster-list"></div>
+          <p class="note">くわしい内容と最新の状況は、出典のページで確かめてください。</p>
+          <button id="home-disaster-reload" type="button" class="button">読み直す</button>
+        </div>
+
+      </section>
+
+      <!-- 6. 被災者の一覧（F1。専門職と一般の支援者） -->
+      <section id="screen-survivors" class="screen" hidden>
+        <h1 class="title">被災者の一覧</h1>
+        <p id="survivors-note" class="note"></p>
+        <p id="survivors-risk-note" class="note"></p>
+
+        <div id="survivors-duplicates" class="notice-box notice-warn" hidden></div>
+
+        <!-- 期限が近い未申請の支援（F6。専門職だけ。この一覧の応答から作る） -->
+        <div class="card" id="survivors-support-alerts-card" hidden>
+          <h2 class="card-title"><span data-icon="calendar"></span>期限が近い未申請の支援</h2>
+          <!-- 期日で絞り込む（使いやすさの改修の計画.md 11章。f6.js が作る） -->
+          <div id="survivors-support-alerts-filters" class="chips" role="group" aria-label="期限で絞り込む"></div>
+          <p id="survivors-support-alerts-count" class="note"></p>
+          <ul id="survivors-support-alerts" class="list"></ul>
+          <p id="survivors-support-alerts-note" class="note"></p>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">絞り込み</h2>
+          <div class="filters">
+            <label class="field">
+              <span class="field-label">段階</span>
+              <select id="filter-stage"></select>
+            </label>
+            <label class="field">
+              <span class="field-label">今いる場所</span>
+              <select id="filter-location-type"></select>
+            </label>
+            <label class="field" id="filter-assignee-field">
+              <span class="field-label">担当</span>
+              <select id="filter-assignee"></select>
+            </label>
+            <label class="field" id="filter-deadline-field" hidden>
+              <span class="field-label">未申請の期限</span>
+              <select id="filter-deadline"></select>
+            </label>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="survivors-new" type="button" class="button button-primary" hidden>
+            被災者を登録する
+          </button>
+          <button id="survivors-reload" type="button" class="button">読み直す</button>
+        </div>
+
+        <p id="survivors-count" class="note"></p>
+        <ul id="survivors-list" class="cards"></ul>
+
+        <button class="back-button back-to-home" type="button"><span data-icon="arrow-left"></span><span>ホームに戻る</span></button>
+      </section>
+
+      <!-- 7. 被災者の登録（F1。専門職だけ） -->
+      <section id="screen-survivor-new" class="screen screen-narrow" hidden>
+        <h1 class="title">被災者の登録</h1>
+        <p class="note">登録すると、ご本人用の確認コードが出ます。</p>
+
+        <div id="similar-box" class="notice-box notice-warn" hidden>
+          <p id="similar-message"></p>
+          <ul id="similar-list" class="list"></ul>
+          <p class="note">同じ方であれば、一覧から既にある記録を開いてください。</p>
+        </div>
+
+        <form id="form-survivor-new" class="form card" novalidate>
+          <label class="field">
+            <span class="field-label">お名前</span>
+            <input id="new-name" type="text" autocomplete="off" required />
+          </label>
+          <label class="field">
+            <span class="field-label">年齢</span>
+            <input id="new-age" type="number" inputmode="numeric" min="0" max="120" required />
+          </label>
+          <label class="field">
+            <span class="field-label">世帯の人数</span>
+            <input id="new-household" type="number" inputmode="numeric" min="1" max="30" required />
+          </label>
+          <label class="field">
+            <span class="field-label">連絡先</span>
+            <input id="new-contact" type="text" placeholder="電話番号など" />
+          </label>
+          <label class="field">
+            <span class="field-label">お住まいの都道府県</span>
+            <input
+              id="new-prefecture-filter"
+              type="text"
+              autocomplete="off"
+              placeholder="文字で絞り込めます（例：いしかわ）"
+            />
+            <select id="new-prefecture"></select>
+          </label>
+          <label class="field">
+            <span class="field-label">お住まいの市区町村</span>
+            <input
+              id="new-municipality-filter"
+              type="text"
+              autocomplete="off"
+              placeholder="文字で絞り込めます"
+            />
+            <select id="new-municipality"></select>
+          </label>
+          <label class="field">
+            <span class="field-label">住所</span>
+            <input id="new-address" type="text" placeholder="町名・番地など" />
+          </label>
+          <label class="field">
+            <span class="field-label">今の段階</span>
+            <select id="new-stage" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">今いる場所</span>
+            <select id="new-location-type" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">場所の名前</span>
+            <input id="new-location-detail" type="text" placeholder="避難所名・地区など" />
+          </label>
+          <p class="form-error" hidden></p>
+          <button type="submit" class="button button-primary">登録する</button>
+          <button id="new-force" type="button" class="button" hidden>
+            別の方なので、このまま登録する
+          </button>
+        </form>
+
+        <button class="back-button back-to-survivors" type="button"><span data-icon="arrow-left"></span><span>一覧に戻る</span></button>
+      </section>
+
+      <!-- 8. 発行した確認コード（F1。紙に書いて渡す） -->
+      <section id="screen-link-code" class="screen screen-narrow" hidden>
+        <h1 class="title">確認コードをお渡しください</h1>
+        <p class="note">
+          ご本人がこのコードを入れると、いま作った記録とご本人のアカウントがつながります。
+        </p>
+        <div class="card code-card">
+          <p class="code-display" id="issued-code"></p>
+          <p class="note" id="issued-expires"></p>
+          <p class="note">
+            紙に書いてお渡しください。この画面を離れると、もう一度は表示できません。
+          </p>
+        </div>
+        <div class="actions">
+          <button id="issued-open" type="button" class="button button-primary">
+            登録した記録を開く
+          </button>
+          <button class="back-button back-to-survivors" type="button"><span data-icon="arrow-left"></span><span>一覧に戻る</span></button>
+        </div>
+      </section>
+
+      <!-- 9. 被災者の詳細（F1。立場に応じた範囲） -->
+      <section id="screen-survivor" class="screen screen-medium" hidden>
+        <h1 id="detail-title" class="title"></h1>
+        <p id="detail-subtitle" class="note"></p>
+
+        <div class="card">
+          <h2 class="card-title">基本の情報</h2>
+          <dl id="detail-basic" class="pairs"></dl>
+        </div>
+
+        <!-- 悪化の兆し（F4。支援者だけ。本人向けの応答には入らない） -->
+        <div class="card" id="detail-risk-card" hidden>
+          <h2 class="card-title">悪化の兆し</h2>
+          <dl id="detail-risk" class="pairs"></dl>
+          <h3 class="card-subtitle">根拠（記録・相談の記述）</h3>
+          <ul id="detail-risk-evidence" class="list"></ul>
+          <p id="detail-risk-note" class="note"></p>
+          <form id="form-risk" class="form" hidden novalidate>
+            <label class="field">
+              <span class="field-label">度合いを変える</span>
+              <select id="risk-level" required></select>
+            </label>
+            <label class="field">
+              <span class="field-label">変える理由（必ず書いてください）</span>
+              <textarea id="risk-reason" rows="2" required></textarea>
+            </label>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button button-primary">度合いを変える</button>
+          </form>
+        </div>
+
+        <div class="card" id="detail-watch-card" hidden>
+          <h2 class="card-title">見守りの状況</h2>
+          <dl id="detail-watch" class="pairs"></dl>
+        </div>
+
+        <div class="card" id="detail-location-card" hidden>
+          <h2 class="card-title">居場所を変える</h2>
+          <p class="note">前の居場所は消えずに履歴として残ります。</p>
+          <form id="form-location" class="form" novalidate>
+            <label class="field">
+              <span class="field-label">今の段階</span>
+              <select id="location-stage" required></select>
+            </label>
+            <label class="field">
+              <span class="field-label">今いる場所</span>
+              <select id="location-type" required></select>
+            </label>
+            <label class="field">
+              <span class="field-label">場所の名前</span>
+              <input id="location-detail" type="text" placeholder="避難所名・地区など" />
+            </label>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button button-primary">変更を保存する</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">居場所の履歴</h2>
+          <ul id="detail-history" class="list"></ul>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">担当の支援者</h2>
+          <ul id="detail-assignments" class="list"></ul>
+        </div>
+
+        <div class="card" id="detail-assign-card" hidden>
+          <h2 class="card-title">担当を割り当てる</h2>
+          <form id="form-assign" class="form" novalidate>
+            <label class="field">
+              <span class="field-label">一般の支援者</span>
+              <select id="assign-supporter" required></select>
+            </label>
+            <label class="field field-check">
+              <input id="assign-consent" type="checkbox" />
+              <span>ご本人の同意を口頭で得ました</span>
+            </label>
+            <p class="field-note" id="assign-consent-note"></p>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button button-primary">担当にする</button>
+          </form>
+        </div>
+
+        <!-- 健康・介護の情報（F3）。一般の支援者は見るだけ -->
+        <div class="card" id="detail-health-card" hidden>
+          <h2 class="card-title">健康・介護の情報</h2>
+          <p id="detail-health-source" class="note"></p>
+          <dl id="detail-health" class="pairs"></dl>
+          <div class="actions">
+            <button id="health-edit" type="button" class="button" hidden>
+              健康・介護の情報を入れる
+            </button>
+          </div>
+          <p id="detail-health-note" class="field-note"></p>
+        </div>
+
+        <!-- 訪問・見守りの記録（F2）。本人には出さない -->
+        <div class="card" id="detail-visits-card" hidden>
+          <h2 class="card-title">訪問・見守りの記録</h2>
+          <div class="actions">
+            <button id="visit-new" type="button" class="button button-primary">
+              訪問・見守りを記録する
+            </button>
+          </div>
+          <ul id="detail-visits" class="list"></ul>
+        </div>
+
+        <!-- 相談（F8）。一般の支援者には出さない -->
+        <div class="card" id="detail-consultations-card" hidden>
+          <h2 class="card-title">相談</h2>
+          <p id="detail-consultations-note" class="note"></p>
+          <div class="actions">
+            <button id="consultation-new" type="button" class="button button-primary" hidden>
+              相談する
+            </button>
+          </div>
+          <ul id="detail-consultations" class="list"></ul>
+        </div>
+
+        <!-- 受け入れ先と引き継ぎ（F5・F3）。一般の支援者は引き継ぎシートだけ -->
+        <div class="card" id="detail-placement-card" hidden>
+          <h2 class="card-title">受け入れ先と引き継ぎ</h2>
+          <p id="detail-placement-note" class="note"></p>
+          <div class="actions">
+            <button id="placement-open" type="button" class="button" hidden>
+              受け入れ先の候補を見る
+            </button>
+            <button id="handover-new" type="button" class="button" hidden>
+              引き継ぎシートを作る
+            </button>
+          </div>
+          <h3 class="card-subtitle">作った引き継ぎシート</h3>
+          <ul id="detail-handovers" class="list"></ul>
+        </div>
+
+        <!-- 受けられる支援と申請の状況（F6）。一般の支援者には出さない -->
+        <div class="card" id="detail-supports-card" hidden>
+          <h2 class="card-title">受けられる支援と申請の状況</h2>
+          <p id="detail-supports-note" class="note"></p>
+          <div class="actions">
+            <button id="supports-open" type="button" class="button" hidden>
+              受けられる支援を調べる
+            </button>
+          </div>
+          <ul id="detail-supports" class="cards"></ul>
+        </div>
+
+        <div class="actions">
+          <button class="back-button back-to-survivors" type="button"><span data-icon="arrow-left"></span><span>一覧に戻る</span></button>
+          <button class="back-button back-to-home" type="button"><span data-icon="arrow-left"></span><span>ホームに戻る</span></button>
+        </div>
+      </section>
+
+      <!-- 10. 訪問・見守りの記録（F2。専門職と担当の一般の支援者） -->
+      <section id="screen-visit-new" class="screen screen-narrow" hidden>
+        <h1 class="title">訪問・見守りの記録</h1>
+        <p id="visit-subtitle" class="note"></p>
+
+        <div class="card">
+          <h2 class="card-title">1. 見たこと・聞いたことを書く</h2>
+          <form id="form-visit-text" class="form" novalidate>
+            <label class="field">
+              <span class="field-label">訪問・見守りの内容</span>
+              <textarea
+                id="visit-raw-text"
+                rows="6"
+                placeholder="例：きのうから熱っぽい。ごはんは朝だけ。夜はトイレで何度も起きる。体育館が寒いと言っている。"
+                required
+              ></textarea>
+              <span class="field-note">
+                話し言葉のままで大丈夫です。AIが同じ項目に振り分けます。
+              </span>
+            </label>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button button-primary">AIで項目に整える</button>
+            <button id="visit-manual" type="button" class="link-button">
+              AIを使わずに手で入れる
+            </button>
+          </form>
+        </div>
+
+        <div class="card" id="visit-confirm-card" hidden>
+          <h2 class="card-title">2. 内容を確かめて直す</h2>
+          <p class="note">
+            文章に書かれていない項目は「記載なし」のままにしてください。保存するまで記録になりません。
+          </p>
+          <p id="visit-ai-note" class="notice-box notice-warn" hidden></p>
+          <form id="form-visit" class="form" novalidate>
+            <label class="field">
+              <span class="field-label">訪問した日時</span>
+              <input id="visit-visited-at" type="datetime-local" />
+            </label>
+
+            <div id="visit-items"></div>
+
+            <div id="visit-location-proposal" class="proposal" hidden>
+              <h3 class="proposal-title">居場所が変わったようです</h3>
+              <p id="visit-location-proposal-text"></p>
+              <label class="field field-check" id="visit-apply-location-field">
+                <input id="visit-apply-location" type="checkbox" />
+                <span>記録の居場所も、いま変える</span>
+              </label>
+              <p id="visit-location-pending-note" class="field-note" hidden>
+                この案は「確認待ち」として残り、専門職が確かめてから反映されます。
+              </p>
+            </div>
+
+            <div id="visit-health-proposal" class="proposal" hidden>
+              <h3 class="proposal-title">健康・介護の情報が変わったようです</h3>
+              <p id="visit-health-proposal-reason" class="note"></p>
+              <ul id="visit-health-proposal-list" class="list"></ul>
+              <label class="field field-check" id="visit-apply-health-field">
+                <input id="visit-apply-health" type="checkbox" />
+                <span>健康・介護の情報も、いま更新する</span>
+              </label>
+              <p id="visit-health-pending-note" class="field-note" hidden>
+                この案は「確認待ち」として残り、専門職が確かめてから反映されます。
+              </p>
+            </div>
+
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button button-primary">この内容で保存する</button>
+          </form>
+        </div>
+
+        <button class="back-button back-to-detail" type="button"><span data-icon="arrow-left"></span><span>記録に戻る</span></button>
+      </section>
+
+      <!-- 11. 健康・介護の情報（F3。専門職と本人） -->
+      <section id="screen-health" class="screen screen-narrow" hidden>
+        <h1 class="title">健康・介護の情報</h1>
+        <p class="note">
+          移った先の施設や支援者にそのまま渡せるように、同じ項目で残します。前の内容も消えずに残ります。
+        </p>
+        <p id="health-self-note" class="notice-box" hidden></p>
+        <form id="form-health" class="form card" novalidate>
+          <div id="health-fields"></div>
+          <p class="form-error" hidden></p>
+          <button type="submit" class="button button-primary">保存する</button>
+        </form>
+        <button class="back-button back-to-detail" type="button"><span data-icon="arrow-left"></span><span>記録に戻る</span></button>
+      </section>
+
+      <!-- 12. 相談を送る（F8。ご本人だけ） -->
+      <section id="screen-consultation-new" class="screen screen-narrow" hidden>
+        <h1 class="title">相談する</h1>
+        <p id="consultation-subtitle" class="note"></p>
+
+        <p id="consultation-emergency-guide" class="notice-box notice-warn"></p>
+        <!-- 組織につながっていないときの相談は公開になる（追加修正②。文言はAPIが返す） -->
+        <p id="consultation-public-notice" class="notice-box notice-warn" hidden></p>
+
+        <!-- 書いた文章をそのまま送る（画面の改修の計画.md 6章）。AIが項目に分けた案は、
+             相談員が読むときに使う。ご本人には確かめてもらわない -->
+        <div class="card">
+          <h2 class="card-title">困っていることを書いて送る</h2>
+          <form id="form-consultation" class="form" novalidate>
+            <label class="field">
+              <span class="field-label">いまの状態や困っていること</span>
+              <textarea
+                id="consultation-raw-text"
+                rows="6"
+                placeholder="例：きのうから胸が苦しい。血圧の薬が切れてしまって、どこでもらえるか分からない。"
+                required
+              ></textarea>
+              <span class="field-note">
+                話し言葉のままで大丈夫です。書いた文章が、そのまま相談員に届きます。
+              </span>
+            </label>
+            <label class="field">
+              <span class="field-label">相談の種類</span>
+              <select id="consultation-category"></select>
+              <span class="field-note">分からなければ、選ばずに送れます。</span>
+            </label>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button button-primary">この内容で送る</button>
+          </form>
+        </div>
+
+        <button class="back-button back-to-detail" type="button"><span data-icon="arrow-left"></span><span>自分の記録に戻る</span></button>
+      </section>
+
+      <!-- 13. 受け入れ先の施設（F5。専門職だけ） -->
+      <section id="screen-facilities" class="screen" hidden>
+        <h1 class="title">受け入れ先の施設</h1>
+        <p class="note">
+          空きの数と断水・停電は、変えても前の内容が消えずに残ります。
+        </p>
+        <p id="facilities-count" class="note"></p>
+        <p id="facilities-stale-note" class="notice-box notice-warn" hidden></p>
+
+        <div class="actions">
+          <button id="facilities-reload" type="button" class="button">読み直す</button>
+        </div>
+
+        <ul id="facilities-list" class="cards"></ul>
+
+        <div class="card">
+          <h2 class="card-title">施設を登録する</h2>
+          <form id="form-facility" class="form" novalidate>
+            <label class="field">
+              <span class="field-label">施設の名前</span>
+              <input id="facility-name" type="text" required />
+            </label>
+            <label class="field">
+              <span class="field-label">種類</span>
+              <select id="facility-type" required></select>
+            </label>
+            <label class="field">
+              <span class="field-label">場所</span>
+              <input id="facility-address" type="text" placeholder="住所・地区など" />
+            </label>
+            <label class="field">
+              <span class="field-label">空きの数</span>
+              <input
+                id="facility-vacancies"
+                type="number"
+                inputmode="numeric"
+                min="0"
+                max="9999"
+                required
+              />
+            </label>
+            <div class="field">
+              <span class="field-label">対応できる介護・医療</span>
+              <div id="facility-capabilities"></div>
+              <span class="field-note">
+                ここで選んだものだけが、必要な医療に合うかの判断に使われます。
+              </span>
+            </div>
+            <label class="field field-check">
+              <input id="facility-water" type="checkbox" />
+              <span>断水している</span>
+            </label>
+            <label class="field field-check">
+              <input id="facility-power" type="checkbox" />
+              <span>停電している</span>
+            </label>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button button-primary">登録する</button>
+          </form>
+        </div>
+
+        <button class="back-button back-to-home" type="button"><span data-icon="arrow-left"></span><span>ホームに戻る</span></button>
+      </section>
+
+      <!-- 14. 受け入れ先の候補と決定（F5。専門職だけ） -->
+      <section id="screen-placement" class="screen screen-medium" hidden>
+        <h1 class="title">受け入れ先を決める</h1>
+        <p id="placement-subtitle" class="note"></p>
+        <p id="placement-disclaimer" class="note"></p>
+
+        <p id="placement-notice" class="notice-box notice-warn" hidden></p>
+        <p id="placement-unmatched" class="notice-box notice-warn" hidden></p>
+
+        <div class="card">
+          <h2 class="card-title">合う施設の候補</h2>
+          <p id="placement-candidates-note" class="note"></p>
+          <ul id="placement-candidates" class="list"></ul>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">候補に出なかった施設</h2>
+          <p class="note">空きがない施設と、必要な医療に対応できない施設です。</p>
+          <ul id="placement-excluded" class="list"></ul>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">移る先を決める</h2>
+          <p class="note">候補にない施設も選べます。選んだ理由は記録に残ります。</p>
+          <form id="form-placement" class="form" novalidate>
+            <label class="field">
+              <span class="field-label">移る先の施設</span>
+              <select id="placement-facility" required></select>
+            </label>
+            <label class="field">
+              <span class="field-label">選んだ理由（必ず書いてください）</span>
+              <textarea id="placement-reason" rows="3" required></textarea>
+            </label>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button button-primary">この施設に決める</button>
+          </form>
+        </div>
+
+        <div class="card" id="placement-next-card" hidden>
+          <h2 class="card-title">決まりました。次に進みます</h2>
+          <p id="placement-next-note" class="note"></p>
+          <div class="actions">
+            <button id="placement-to-handover" type="button" class="button button-primary">
+              引き継ぎシートを作る
+            </button>
+            <button id="placement-to-detail" type="button" class="button">
+              居場所を変える（記録に戻る）
+            </button>
+          </div>
+        </div>
+
+        <button class="back-button back-to-detail" type="button"><span data-icon="arrow-left"></span><span>記録に戻る</span></button>
+      </section>
+
+      <!-- 15. 引き継ぎシートを作る（F3。専門職と担当の一般の支援者） -->
+      <section id="screen-handover-new" class="screen screen-narrow" hidden>
+        <h1 class="title">引き継ぎシートを作る</h1>
+        <p id="handover-subtitle" class="note"></p>
+
+        <div class="card">
+          <h2 class="card-title">1. 移る先を入れる</h2>
+          <form id="form-handover-destination" class="form" novalidate>
+            <label class="field">
+              <span class="field-label">移る先（施設や支援者の名前）</span>
+              <input id="handover-destination" type="text" required />
+            </label>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button button-primary">AIで案を作る</button>
+            <button id="handover-manual" type="button" class="link-button">
+              AIを使わずに自分で書く
+            </button>
+          </form>
+        </div>
+
+        <div class="card" id="handover-confirm-card" hidden>
+          <h2 class="card-title">2. 内容を確かめて直す</h2>
+          <p id="handover-disclaimer" class="notice-box notice-warn"></p>
+          <p id="handover-ai-note" class="notice-box notice-warn" hidden></p>
+          <form id="form-handover" class="form" novalidate>
+            <label class="field">
+              <span class="field-label">直近の様子の要約</span>
+              <textarea id="handover-summary" rows="6" required></textarea>
+            </label>
+            <label class="field">
+              <span class="field-label">移る先で気をつけること</span>
+              <textarea id="handover-cautions" rows="6"></textarea>
+            </label>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button button-primary">この内容で保存する</button>
+          </form>
+        </div>
+
+        <button class="back-button back-to-detail" type="button"><span data-icon="arrow-left"></span><span>記録に戻る</span></button>
+      </section>
+
+      <!-- 16. 引き継ぎシート（F3。印刷してPDFにする画面） -->
+      <section id="screen-handover" class="screen screen-medium" hidden>
+        <h1 class="title">引き継ぎシート</h1>
+        <p id="handover-print-notice" class="notice-box notice-warn" hidden></p>
+        <div class="actions no-print">
+          <button id="handover-print" type="button" class="button button-primary">
+            印刷する（PDFにもできます）
+          </button>
+        </div>
+
+        <div class="card sheet">
+          <dl id="handover-print-meta" class="pairs"></dl>
+
+          <h2 class="card-title">健康・介護の情報</h2>
+          <dl id="handover-print-health" class="pairs"></dl>
+
+          <h2 class="card-title">直近の様子の要約</h2>
+          <p id="handover-print-summary" class="sheet-text"></p>
+
+          <h2 class="card-title">気をつけること</h2>
+          <p id="handover-print-cautions" class="sheet-text"></p>
+
+          <p id="handover-print-disclaimer" class="note"></p>
+        </div>
+
+        <button
+          id="handover-back-to-list"
+          class="back-button no-print"
+          type="button"
+          hidden
+        >
+          <span data-icon="arrow-left"></span><span>引き継ぎシートの一覧に戻る</span>
+        </button>
+        <button class="back-button back-to-detail no-print" type="button"><span data-icon="arrow-left"></span><span>記録に戻る</span></button>
+      </section>
+
+      <!-- 16-2. 引き継ぎシートの一覧（追加修正⑪。ご本人のホームから、記録の詳細を開かずに開く） -->
+      <section id="screen-handover-list" class="screen screen-medium" hidden>
+        <h1 class="title">引き継ぎシート</h1>
+        <p class="note">
+          支援者が作った引き継ぎシートです。開くと印刷の画面になり、紙やPDFにして移る先に渡せます。
+          支援の組織を変えても、前に作ったシートは見られます。
+        </p>
+        <div class="card">
+          <ul id="handover-list" class="list"></ul>
+        </div>
+        <button class="back-button back-to-home" type="button"><span data-icon="arrow-left"></span><span>ホームに戻る</span></button>
+      </section>
+
+      <!-- 17. 受けられる支援と申請の状況（F6。専門職とご本人） -->
+      <section id="screen-supports" class="screen screen-medium" hidden>
+        <h1 id="supports-title" class="title"></h1>
+        <p id="supports-subtitle" class="note"></p>
+        <p id="supports-disclaimer" class="notice-box notice-warn"></p>
+        <p id="supports-notice" class="notice-box notice-warn" hidden></p>
+
+        <div class="card">
+          <h2 id="supports-form-title" class="card-title"></h2>
+          <form id="form-support-conditions" class="form" novalidate>
+            <label class="field">
+              <span id="supports-damage-label" class="field-label"></span>
+              <select id="support-housing-damage" required></select>
+            </label>
+            <!-- 世帯の人数は記録の値を使い、ここでは聞かない（使いやすさの改修の計画.md 6-4）。
+                 記録に無いときだけ欄を出す（調べるのに使うだけで、記録は変えない） -->
+            <div id="support-household-record" class="field" hidden>
+              <span class="field-label">世帯の人数</span>
+              <p id="support-household-value" class="field-value"></p>
+              <p id="support-household-note" class="note"></p>
+              <button id="support-household-edit" type="button" class="link-button" hidden>
+                プロフィールで直す
+              </button>
+            </div>
+            <label id="support-household-field" class="field" hidden>
+              <span id="supports-household-label" class="field-label"></span>
+              <input id="support-household" type="number" inputmode="numeric" min="1" max="30" />
+            </label>
+            <label class="field">
+              <span id="supports-intent-label" class="field-label"></span>
+              <select id="support-rebuild-intent" required></select>
+            </label>
+            <p id="supports-uses-consultations" class="note">
+              住宅の被害と、これまでの相談の内容をもとに調べます。
+            </p>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button button-primary">受けられそうな支援を調べる</button>
+          </form>
+        </div>
+
+        <div class="card" id="support-candidates-card" hidden>
+          <h2 id="supports-candidates-title" class="card-title"></h2>
+          <p id="support-candidates-count" class="note"></p>
+          <ul id="support-candidates" class="cards"></ul>
+
+          <h3 class="card-subtitle">候補に出なかった制度から選ぶ</h3>
+          <p id="supports-programs-note" class="note"></p>
+          <ul id="support-programs" class="cards"></ul>
+
+          <p id="support-record-error" class="form-error" hidden></p>
+          <div class="actions">
+            <button id="support-record" type="button" class="button button-primary">
+              選んだ支援を記録する
+            </button>
+          </div>
+        </div>
+
+        <div class="card" id="support-recorded-card" hidden>
+          <h2 id="supports-recorded-title" class="card-title"></h2>
+          <p id="supports-recorded-note" class="note"></p>
+          <ul id="support-recorded" class="cards"></ul>
+        </div>
+
+        <div class="actions">
+          <button id="supports-to-consultation" type="button" class="button" hidden>
+            分からないことを相談する
+          </button>
+          <button class="back-button back-to-detail" type="button"><span data-icon="arrow-left"></span><span>記録に戻る</span></button>
+        </div>
+      </section>
+      <!-- 13. 組織全体の状況（F7。専門職だけ。mart から1回読むだけ） -->
+      <section id="screen-dashboard" class="screen screen-medium" hidden>
+        <h1 class="title">組織全体の状況</h1>
+        <p id="dashboard-as-of" class="note"></p>
+        <p id="dashboard-note" class="notice-box notice-warn"></p>
+
+        <div class="actions">
+          <button id="dashboard-reload" type="button" class="button">読み直す</button>
+          <button class="back-button back-to-home" type="button"><span data-icon="arrow-left"></span><span>ホームに戻る</span></button>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">合計</h2>
+          <dl class="pairs">
+            <dt>被災者の人数</dt>
+            <dd id="dashboard-total-survivor-count"></dd>
+            <dt>未対応の相談がある方</dt>
+            <dd id="dashboard-total-with-open-consultation"></dd>
+            <dt>未申請の支援がある方</dt>
+            <dd id="dashboard-total-with-unapplied-support"></dd>
+            <dt>反映待ちの更新の案がある方</dt>
+            <dd id="dashboard-total-with-pending-proposal"></dd>
+          </dl>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">段階ごとの人数</h2>
+          <ul id="dashboard-by-stage" class="list"></ul>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">今いる場所ごとの人数</h2>
+          <p class="note">記録のある種類だけを出します。</p>
+          <ul id="dashboard-by-location-type" class="list"></ul>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">悪化の兆しの度合いごとの人数</h2>
+          <ul id="dashboard-by-risk-level" class="list"></ul>
+        </div>
+      </section>
+
+      <!-- 18. プロフィール（要望4。全員） -->
+      <section id="screen-profile" class="screen screen-narrow" hidden>
+        <h1 class="title">プロフィール</h1>
+
+        <div class="card">
+          <h2 class="card-title">見るだけの項目</h2>
+          <dl class="pairs">
+            <dt>立場</dt>
+            <dd id="profile-role"></dd>
+            <dt>組織</dt>
+            <dd id="profile-org"></dd>
+            <dt>ログインの方法</dt>
+            <dd id="profile-login-method"></dd>
+            <dt id="profile-municipality-row-label" hidden>住んでいる市区町村</dt>
+            <dd id="profile-municipality" hidden></dd>
+          </dl>
+          <p class="field-note">
+            立場・組織はここでは変えられません。見られる記録の範囲が変わるためです。
+            （ご本人は、下の「支援の組織」から選び直せます）
+          </p>
+        </div>
+
+        <!-- ログインの方法をつなぐ（使いやすさの改修の計画.md 1章）。つなぐと、どちらでログインしても同じ人になる -->
+        <div class="card" id="profile-login-methods">
+          <h2 class="card-title"><span data-icon="link"></span>ログインの方法</h2>
+          <p class="note">
+            Google と電話番号は、つながないと別の利用者になります。両方つないでおくと、
+            どちらでログインしても、いまの登録の内容が出ます。
+          </p>
+          <ul id="profile-login-method-list" class="method-list"></ul>
+          <button id="profile-link-google" type="button" class="button" hidden>
+            Google をつなぐ
+          </button>
+          <form id="form-link-phone" class="form" hidden novalidate>
+            <label class="field">
+              <span class="field-label">つなぐ電話番号</span>
+              <input id="link-phone-number" type="tel" inputmode="tel" autocomplete="tel" required />
+            </label>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button">確認コードを送る</button>
+          </form>
+          <form id="form-link-phone-code" class="form" hidden novalidate>
+            <p class="note">届いた6桁の番号を入れてください。</p>
+            <label class="field">
+              <span class="field-label">確認コード</span>
+              <input
+                id="link-phone-code"
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="6"
+                required
+              />
+            </label>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button button-primary">電話番号をつなぐ</button>
+            <button id="link-phone-restart" type="button" class="link-button">電話番号を入れ直す</button>
+          </form>
+          <div id="recaptcha-link-container"></div>
+        </div>
+
+        <!-- 文字の大きさ（使いやすさの改修の計画.md 4-2の8）。この端末にだけ覚える -->
+        <div class="card">
+          <h2 class="card-title"><span data-icon="text"></span>文字の大きさ</h2>
+          <div class="segmented" role="radiogroup" aria-label="文字の大きさ">
+            <label class="segmented-item">
+              <input type="radio" name="text-size" value="normal" id="text-size-normal" />
+              <span>ふつう</span>
+            </label>
+            <label class="segmented-item">
+              <input type="radio" name="text-size" value="large" id="text-size-large" />
+              <span>大きい</span>
+            </label>
+          </div>
+          <p class="field-note">この端末だけに効きます。</p>
+        </div>
+
+        <!-- 支援者（専門職・一般の支援者）が変える項目 -->
+        <form id="form-profile-supporter" class="form card" hidden novalidate>
+          <h2 class="card-title">あなたの情報</h2>
+          <label class="field">
+            <span class="field-label">表示名</span>
+            <input id="profile-display-name" type="text" autocomplete="name" required />
+          </label>
+          <label class="field" id="profile-profession-field" hidden>
+            <span class="field-label">職種</span>
+            <select id="profile-profession"></select>
+            <span class="field-note">保健師・ケアマネジャー・相談員などから選んでください。</span>
+          </label>
+          <label class="field">
+            <span class="field-label">連絡先</span>
+            <input
+              id="profile-supporter-contact"
+              type="tel"
+              autocomplete="tel"
+              placeholder="電話番号など"
+              required
+            />
+            <span class="field-note">担当の相談員から連絡するときに使います。ご本人やほかの支援者には見えません。</span>
+          </label>
+          <label class="field">
+            <span class="field-label">活動する都道府県</span>
+            <input
+              id="profile-supporter-prefecture-filter"
+              type="text"
+              autocomplete="off"
+              placeholder="文字で絞り込めます（例：いしかわ）"
+            />
+            <select id="profile-supporter-prefecture" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">活動する市区町村</span>
+            <input
+              id="profile-supporter-municipality-filter"
+              type="text"
+              autocomplete="off"
+              placeholder="文字で絞り込めます（例：わじま）"
+            />
+            <select id="profile-supporter-municipality" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">住所</span>
+            <input
+              id="profile-supporter-address"
+              type="text"
+              autocomplete="street-address"
+              placeholder="町名・番地など"
+              required
+            />
+          </label>
+          <p class="form-error" hidden></p>
+          <button type="submit" class="button button-primary">保存する</button>
+        </form>
+
+        <!-- 組織のオーナーだけ（追加修正⑥）。参加コードと、オーナーの権限を付ける・外す -->
+        <div id="profile-owner" hidden>
+          <div class="card code-card">
+            <h2 class="card-title">組織の参加コード</h2>
+            <p class="field-note">
+              組織のオーナーだけが見られます。専門職用のコードは、専門職として入る人にだけ渡してください。
+            </p>
+            <p id="profile-owner-codes-status" class="note" hidden></p>
+            <p class="field-note">専門職用の参加コード</p>
+            <p class="code-display" id="profile-owner-pro-code"></p>
+            <p class="field-note">一般の支援者用の参加コード</p>
+            <p class="code-display" id="profile-owner-vol-code"></p>
+            <button id="profile-owner-reissue" type="button" class="button">
+              参加コードを発行し直す
+            </button>
+            <p class="field-note">
+              発行し直すと、前のコードでは組織に入れなくなります（すでに入っている人はそのままです）。
+            </p>
+          </div>
+          <div class="card">
+            <h2 class="card-title">組織の専門職とオーナー</h2>
+            <p class="field-note">
+              オーナーは、参加コードを見る・発行し直す、ほかの専門職をオーナーにすることができます。
+              最後の1人のオーナーは外せません。
+            </p>
+            <p id="profile-owner-members-status" class="note" hidden></p>
+            <ul id="profile-owner-members" class="list"></ul>
+          </div>
+        </div>
+
+        <!-- ご本人が変える項目 -->
+        <div id="profile-survivor-fields" hidden>
+          <p id="profile-survivor-note" class="note" hidden></p>
+          <form id="form-profile-survivor" class="form card" novalidate>
+            <h2 class="card-title">基本の情報</h2>
+            <label class="field">
+              <span class="field-label">お名前</span>
+              <input id="profile-name" type="text" autocomplete="name" required />
+            </label>
+            <label class="field">
+              <span class="field-label">年齢</span>
+              <input id="profile-age" type="number" inputmode="numeric" min="0" max="120" />
+            </label>
+            <label class="field">
+              <span class="field-label">世帯の人数</span>
+              <input
+                id="profile-household"
+                type="number"
+                inputmode="numeric"
+                min="1"
+                max="30"
+              />
+            </label>
+            <label class="field">
+              <span class="field-label">連絡先</span>
+              <input id="profile-contact" type="text" placeholder="電話番号など" />
+            </label>
+            <label class="field">
+              <span class="field-label">住所</span>
+              <input id="profile-address" type="text" placeholder="町名・番地など" />
+            </label>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button button-primary">保存する</button>
+          </form>
+          <p class="note">
+            居場所や段階を変えたいときは、ご自分の記録の画面から変えてください。
+          </p>
+
+          <!-- 支援の組織を選び直す（追加修正⑦。つなぐ・変える・外す） -->
+          <form id="form-profile-organization" class="form card" novalidate>
+            <h2 class="card-title">支援の組織</h2>
+            <p class="note">いまの組織：<span id="profile-current-org"></span></p>
+            <label class="field">
+              <span class="field-label">組織を選び直す</span>
+              <input
+                id="profile-org-filter"
+                type="text"
+                autocomplete="off"
+                placeholder="組織の名前で探せます"
+              />
+              <select id="profile-survivor-org"></select>
+              <span id="profile-org-note" class="field-note"></span>
+            </label>
+            <p class="field-note">
+              組織を変える・外すと、いまの組織の専門職と担当の支援者からは、あなたの記録が見えなくなり、
+              担当の支援者は外れます。これまでの記録・相談・引き継ぎシートは消えません。
+            </p>
+            <p class="form-error" hidden></p>
+            <button type="submit" class="button button-primary">この組織にする</button>
+          </form>
+
+          <!-- 家族を招く・外す（使いやすさの改修の計画.md 10章。family.js が開く） -->
+          <div class="card">
+            <h2 class="card-title">家族とつなぐ</h2>
+            <p class="note">
+              ご家族に招待コードを渡すと、ご家族があなたの記録（お名前・居場所など）を見て直せます。
+              健康・介護の情報は見えません。いつでも外せます。
+            </p>
+            <button id="profile-family-open" type="button" class="button">家族を招く・外す</button>
+          </div>
+        </div>
+
+        <button class="back-button back-to-home" type="button"><span data-icon="arrow-left"></span><span>ホームに戻る</span></button>
+      </section>
+
+      <!-- 19. 組織に入る（要望1。組織がない支援者だけ） -->
+      <section id="screen-join-organization" class="screen screen-narrow" hidden>
+        <h1 class="title">参加コードで組織に入る</h1>
+        <p class="note">
+          所属する組織から配られた参加コードを入れてください。施設の職員の方は、施設の参加コードを入れてください。
+        </p>
+        <form id="form-join-organization" class="form card" novalidate>
+          <label class="field">
+            <span class="field-label">参加コード</span>
+            <input id="join-org-code" type="text" autocapitalize="characters" required />
+          </label>
+          <label class="field">
+            <span class="field-label">職種</span>
+            <select id="join-org-profession" required></select>
+            <span class="field-note"
+              >専門職（保健師・ケアマネジャー・相談員）でない方は「該当なし」を選んでください。</span
+            >
+          </label>
+          <p class="form-error" hidden></p>
+          <button type="submit" class="button button-primary">組織に入る</button>
+        </form>
+        <button class="back-button back-to-home" type="button"><span data-icon="arrow-left"></span><span>ホームに戻る</span></button>
+      </section>
+
+      <!-- 20. 組織を作る（要望2。組織がない支援者だけ） -->
+      <section id="screen-create-organization" class="screen screen-narrow" hidden>
+        <h1 class="title">組織を作る</h1>
+        <p class="note">
+          作ると、専門職用・一般の支援者用の参加コードが発行されます。あなたはその組織の専門職になります。
+        </p>
+        <form id="form-create-organization" class="form card" novalidate>
+          <label class="field">
+            <span class="field-label">組織の名前</span>
+            <input id="create-org-name" type="text" placeholder="例：○○市地域支え合いセンター" required />
+          </label>
+          <label class="field">
+            <span class="field-label">受け持つ都道府県</span>
+            <input
+              id="create-org-prefecture-filter"
+              type="text"
+              autocomplete="off"
+              placeholder="文字で絞り込めます（例：いしかわ）"
+            />
+            <select id="create-org-prefecture" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">受け持つ市区町村</span>
+            <input
+              id="create-org-municipality-filter"
+              type="text"
+              autocomplete="off"
+              placeholder="文字で絞り込めます"
+            />
+            <select id="create-org-municipality" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">あなたの職種</span>
+            <select id="create-org-profession" required></select>
+          </label>
+          <p class="form-error" hidden></p>
+          <button type="submit" class="button button-primary">作る</button>
+        </form>
+        <button class="back-button back-to-home" type="button"><span data-icon="arrow-left"></span><span>ホームに戻る</span></button>
+      </section>
+
+      <!-- 21. 発行した参加コード（要望2。組織を作ったときだけ） -->
+      <section id="screen-organization-created" class="screen screen-narrow" hidden>
+        <h1 class="title">組織を作りました</h1>
+        <p class="note">
+          専門職用・一般の支援者用の参加コードを、いまから支援者に配ってください。
+        </p>
+        <div class="card code-card">
+          <h2 class="card-title" id="org-created-name"></h2>
+          <p class="field-note">専門職用の参加コード</p>
+          <p class="code-display" id="org-created-pro-code"></p>
+          <p class="field-note">一般の支援者用の参加コード</p>
+          <p class="code-display" id="org-created-vol-code"></p>
+          <p class="note">
+            あなたはこの組織のオーナーです。参加コードは、あとからでもプロフィールの画面で見られます。
+            発行し直すこともできます。
+          </p>
+        </div>
+        <button id="org-created-continue" type="button" class="button button-primary">
+          ホームに進む
+        </button>
+      </section>
+
+      <!-- 周りの地域の状況（使いやすさの改修の計画.md 8章） -->
+      <section id="screen-disaster" class="screen screen-medium" hidden>
+        <h1 class="title">周りの地域の状況を入れる</h1>
+        <p class="note">
+          市区町村や内閣府のページで確かめた内容を入れます。出典のURLを必ず付けてください。
+          直しても、前の内容は消えずに残ります。終わったものは「終わった・取り下げた」にします。
+        </p>
+
+        <div class="card">
+          <h2 class="card-title" id="disaster-form-title">状況を入れる</h2>
+          <form id="form-disaster" class="form" novalidate>
+            <label class="field">
+              <span class="field-label">都道府県</span>
+              <input
+                id="disaster-prefecture-filter"
+                type="text"
+                autocomplete="off"
+                placeholder="文字で絞り込めます（例：いしかわ）"
+              />
+              <select id="disaster-prefecture" required></select>
+            </label>
+            <label class="field">
+              <span class="field-label">市区町村</span>
+              <input
+                id="disaster-municipality-filter"
+                type="text"
+                autocomplete="off"
+                placeholder="文字で絞り込めます（例：わじま）"
+              />
+              <select id="disaster-municipality" required></select>
+            </label>
+            <label class="field">
+              <span class="field-label">災害の名前</span>
+              <input id="disaster-name" type="text" maxlength="100" required />
+            </label>
+            <label class="field">
+              <span class="field-label">項目</span>
+              <select id="disaster-kind" required></select>
+            </label>
+            <label class="field">
+              <span class="field-label">状態</span>
+              <input
+                id="disaster-state"
+                type="text"
+                maxlength="200"
+                placeholder="例：適用中、2か所で開設中、入居の申し込みを受付中"
+                required
+              />
+            </label>
+            <label class="field">
+              <span class="field-label">期限</span>
+              <input id="disaster-deadline" type="date" />
+              <span class="field-note">申し込みや受付の期限があるときだけ入れます。</span>
+            </label>
+            <label class="field">
+              <span class="field-label">出典のURL</span>
+              <input
+                id="disaster-source-url"
+                type="url"
+                inputmode="url"
+                maxlength="500"
+                placeholder="https://"
+                required
+              />
+              <span class="field-note">市区町村・内閣府などのページのURL（http:// か https:// で始まるもの）。</span>
+            </label>
+            <label class="field">
+              <span class="field-label">補足</span>
+              <textarea id="disaster-note" rows="3" maxlength="500"></textarea>
+            </label>
+            <label class="field field-check" id="disaster-ended-field" hidden>
+              <input id="disaster-ended" type="checkbox" />
+              <span>終わった・取り下げた（画面に出さなくなります）</span>
+            </label>
+            <p class="form-error" hidden></p>
+            <div class="actions">
+              <button id="disaster-submit" type="submit" class="button button-primary">この内容で入れる</button>
+              <button id="disaster-cancel-edit" type="button" class="button" hidden>直すのをやめる</button>
+            </div>
+          </form>
+        </div>
+
+        <p id="disaster-area" class="note"></p>
+        <div id="disaster-list"></div>
+
+        <button class="back-button back-to-home" type="button"><span data-icon="arrow-left"></span><span>ホームに戻る</span></button>
+      </section>
+
+      <!-- 支援の一覧（使いやすさの改修の計画.md 6-2） -->
+      <!-- ご本人だけ。AIを使わずに、記録した支援と、見られる制度のすべてを出す（programs.js） -->
+      <section id="screen-programs" class="screen" hidden>
+        <h1 class="title">支援</h1>
+        <p id="programs-disclaimer" class="notice-box notice-warn"></p>
+        <div class="actions">
+          <button id="programs-find" type="button" class="button button-primary">
+            <span data-icon="search"></span>自分に合うものを調べる
+          </button>
+        </div>
+        <p class="note">住宅の被害と、これまでの相談の内容をもとに、AIが受けられそうな支援を調べます。</p>
+
+        <div class="segmented" role="radiogroup" aria-label="支援の見方">
+          <label class="segmented-item">
+            <input id="programs-tab-mine" type="radio" name="programs-tab" value="mine" checked />
+            <span>あなたの支援</span>
+          </label>
+          <label class="segmented-item">
+            <input id="programs-tab-all" type="radio" name="programs-tab" value="all" />
+            <span>支援制度の一覧</span>
+          </label>
+        </div>
+
+        <!-- あなたの支援：記録した支援と申請の進み具合（期限の近い順。11章の絞り込み） -->
+        <div id="programs-mine-panel" class="card">
+          <h2 class="card-title"><span data-icon="calendar"></span>あなたの支援</h2>
+          <div id="programs-mine-filters" class="chips" role="group" aria-label="期限で絞り込む"></div>
+          <p id="programs-mine-count" class="note"></p>
+          <ul id="programs-mine-list" class="cards"></ul>
+          <p class="note">申請の状況は「自分に合うものを調べる」の画面の下で直せます。</p>
+        </div>
+
+        <!-- 支援制度の一覧：全国共通と、つながっている組織の制度。名前で探せる -->
+        <div id="programs-all-panel" class="card" hidden>
+          <h2 class="card-title"><span data-icon="gift"></span>支援制度の一覧</h2>
+          <label class="field">
+            <span class="field-label">名前で探す</span>
+            <input id="programs-search" type="search" placeholder="例：応急修理" autocomplete="off" />
+          </label>
+          <p id="programs-all-count" class="note"></p>
+          <ul id="programs-all-list" class="cards"></ul>
+        </div>
+
+        <button class="back-button back-to-home" type="button"><span data-icon="arrow-left"></span><span>ホームに戻る</span></button>
+      </section>
+
+      <!-- 施設の職員（使いやすさの改修の計画.md 9章） -->
+      <!-- 22. 自分の施設（施設の職員だけ。空き・断水・停電・対応できる介護と医療を直す） -->
+      <section id="screen-my-facility" class="screen screen-narrow" hidden>
+        <h1 class="title" id="my-facility-name">自分の施設</h1>
+        <p class="note" id="my-facility-type"></p>
+        <p class="note" id="my-facility-status"></p>
+        <p id="my-facility-stale" class="notice-box notice-warn" hidden></p>
+        <div id="my-facility-loading"></div>
+
+        <form id="form-my-facility" class="form card facility-staff-card" novalidate hidden>
+          <h2 class="card-title">空きの数</h2>
+          <div class="stepper">
+            <button
+              id="my-facility-minus"
+              type="button"
+              class="button stepper-button"
+              aria-label="空きを1つ減らす"
+            >
+              <span data-icon="minus"></span>
+            </button>
+            <output id="my-facility-vacancies" class="stepper-value" aria-live="polite">0</output>
+            <button
+              id="my-facility-plus"
+              type="button"
+              class="button stepper-button"
+              aria-label="空きを1つ増やす"
+            >
+              <span data-icon="plus"></span>
+            </button>
+          </div>
+
+          <h2 class="card-title">断水・停電</h2>
+          <div class="toggles">
+            <button id="my-facility-water" type="button" class="toggle" aria-pressed="false">
+              <span data-icon="check" class="toggle-mark"></span><span>断水している</span>
+            </button>
+            <button id="my-facility-power" type="button" class="toggle" aria-pressed="false">
+              <span data-icon="check" class="toggle-mark"></span><span>停電している</span>
+            </button>
+          </div>
+
+          <h2 class="card-title">対応できる介護・医療</h2>
+          <p class="note">押すと「対応できる」「対応できない」が切り替わります。</p>
+          <div id="my-facility-capabilities" class="toggles"></div>
+
+          <p id="my-facility-changed" class="note" hidden>まだ送っていない変更があります。</p>
+          <p class="form-error" hidden></p>
+          <button type="submit" class="button button-primary button-large">この内容で更新する</button>
+          <p class="field-note">
+            更新すると、受け入れ先を探している専門職の画面にすぐ出ます。前の内容も消えずに残ります。
+          </p>
+        </form>
+
+        <div class="actions">
+          <button id="my-facility-reload" type="button" class="button">読み直す</button>
+        </div>
+
+        <button class="back-button back-to-home" type="button"><span data-icon="arrow-left"></span><span>ホームに戻る</span></button>
+      </section>
+
+      <!-- 家族（使いやすさの改修の計画.md 10章） -->
+      <!-- 22. 家族などが代わりに登録する（一般の支援者。組織がなくてもよい。family.js） -->
+      <section id="screen-family-new" class="screen screen-narrow" hidden>
+        <h1 class="title">家族などを代わりに登録する</h1>
+        <p class="note">
+          ご本人がスマートフォンを使えないときに、ご家族などが代わりに記録を作れます。
+          登録したあなたは、この記録を見て直せます。あとから確認コードで、ご本人のアカウントとつなげます。
+        </p>
+        <form id="form-family-new" class="form card" novalidate>
+          <label class="field">
+            <span class="field-label">ご本人の同意</span>
+            <select id="family-consent" required>
+              <option value="">選んでください</option>
+              <option value="obtained">ご本人の同意を得た</option>
+              <option value="unable">ご本人が同意できない状態（けが・病気など）</option>
+            </select>
+            <span class="field-note">
+              どちらだったかを記録に残します。ご本人がつながったときに、登録した内容を確かめて直せます。
+            </span>
+          </label>
+          <label class="field">
+            <span class="field-label">ご本人のお住まいの都道府県</span>
+            <input
+              id="family-prefecture-filter"
+              type="text"
+              autocomplete="off"
+              placeholder="文字で絞り込めます（例：いしかわ）"
+            />
+            <select id="family-prefecture" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">ご本人のお住まいの市区町村</span>
+            <input
+              id="family-municipality-filter"
+              type="text"
+              autocomplete="off"
+              placeholder="文字で絞り込めます（例：わじま）"
+            />
+            <select id="family-municipality" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">ご本人のお名前</span>
+            <input id="family-name" type="text" autocomplete="off" required />
+          </label>
+          <label class="field">
+            <span class="field-label">今の段階</span>
+            <select id="family-stage" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">今いる場所</span>
+            <select id="family-location-type" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">場所の名前</span>
+            <input id="family-location-detail" type="text" placeholder="避難所名・地区など" />
+          </label>
+          <label class="field">
+            <span class="field-label">年齢</span>
+            <input id="family-age" type="number" inputmode="numeric" min="0" max="120" />
+            <span class="field-note">分からなければ空のままで構いません。あとから直せます。</span>
+          </label>
+          <label class="field">
+            <span class="field-label">世帯の人数（ご本人を含む）</span>
+            <input id="family-household" type="number" inputmode="numeric" min="1" max="30" />
+          </label>
+          <label class="field">
+            <span class="field-label">連絡先</span>
+            <input id="family-contact" type="text" placeholder="ご本人かご家族の電話番号など" />
+          </label>
+          <label class="field">
+            <span class="field-label">住所</span>
+            <input id="family-address" type="text" placeholder="町名・番地など" />
+          </label>
+          <label class="field">
+            <span class="field-label">支援の組織</span>
+            <span class="field-note">
+              選んだ組織の専門職（保健師・相談員など）に、この記録が見えるようになります。
+              空のままでも登録できます。
+            </span>
+            <input
+              id="family-org-filter"
+              type="text"
+              autocomplete="off"
+              placeholder="組織の名前で探せます"
+            />
+            <select id="family-org"></select>
+            <span id="family-org-note" class="field-note"></span>
+          </label>
+          <p class="form-error" hidden></p>
+          <button type="submit" class="button button-primary">登録する</button>
+        </form>
+        <button class="back-button back-to-home" type="button"><span data-icon="arrow-left"></span><span>ホームに戻る</span></button>
+      </section>
+
+      <!-- 23. 家族の記録の一覧と、招待コードを入れる（一般の支援者。family.js） -->
+      <section id="screen-family-list" class="screen" hidden>
+        <h1 class="title">家族の記録</h1>
+        <p class="note">代わりに登録した記録と、招待コードでつながった記録です。</p>
+        <ul id="family-list" class="cards"></ul>
+        <p id="family-list-empty" class="note" hidden>まだつながっている記録はありません。</p>
+        <div class="actions">
+          <button id="family-list-new" type="button" class="button">家族などを代わりに登録する</button>
+        </div>
+        <form id="form-family-join" class="form card" novalidate>
+          <h2 class="card-title">ご本人から招待コードを受け取った方</h2>
+          <label class="field">
+            <span class="field-label">招待コード</span>
+            <input id="family-join-code" type="text" autocapitalize="characters" required />
+          </label>
+          <p class="form-error" hidden></p>
+          <button type="submit" class="button button-primary">家族としてつながる</button>
+        </form>
+        <button class="back-button back-to-home" type="button"><span data-icon="arrow-left"></span><span>ホームに戻る</span></button>
+      </section>
+
+      <!-- 24. 家族の記録（基本の情報と居場所だけ。健康・介護の情報は出さない。family.js） -->
+      <section id="screen-family-record" class="screen screen-medium" hidden>
+        <h1 id="family-record-title" class="title"></h1>
+        <p id="family-record-subtitle" class="note"></p>
+        <div class="card">
+          <h2 class="card-title">基本の情報</h2>
+          <dl id="family-record-basic" class="pairs"></dl>
+        </div>
+
+        <!-- 本人とつなぐ（本人のアカウントがまだつながっていないときだけ） -->
+        <div id="family-link-card" class="card" hidden>
+          <h2 class="card-title">ご本人とつなぐ</h2>
+          <p class="note">
+            確認コードをご本人に渡してください。ご本人が登録の画面の「確認コード」に入れると、
+            この記録とご本人のアカウントがつながります。コードは1回だけ使え、7日で切れます。
+          </p>
+          <button id="family-link-issue" type="button" class="button button-primary">
+            確認コードを出す
+          </button>
+          <div id="family-link-box" class="code-card" hidden>
+            <p id="family-link-code" class="code-display"></p>
+            <p id="family-link-expires" class="note"></p>
+            <p class="note">この画面を離れると、もう一度は表示できません。</p>
+          </div>
+        </div>
+        <p id="family-linked-note" class="note" hidden>
+          ご本人のアカウントとつながっています。ご本人も同じ記録を見て直せます。
+        </p>
+
+        <form id="form-family-location" class="form card" novalidate>
+          <h2 class="card-title">居場所を変える</h2>
+          <label class="field">
+            <span class="field-label">今の段階</span>
+            <select id="family-edit-stage" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">今いる場所</span>
+            <select id="family-edit-location-type" required></select>
+          </label>
+          <label class="field">
+            <span class="field-label">場所の名前</span>
+            <input id="family-edit-location-detail" type="text" placeholder="避難所名・地区など" />
+          </label>
+          <p class="form-error" hidden></p>
+          <button type="submit" class="button button-primary">居場所を変える</button>
+        </form>
+
+        <form id="form-family-basic" class="form card" novalidate>
+          <h2 class="card-title">基本の情報を直す</h2>
+          <label class="field">
+            <span class="field-label">お名前</span>
+            <input id="family-edit-name" type="text" autocomplete="off" required />
+          </label>
+          <label class="field">
+            <span class="field-label">年齢</span>
+            <input id="family-edit-age" type="number" inputmode="numeric" min="0" max="120" />
+          </label>
+          <label class="field">
+            <span class="field-label">世帯の人数</span>
+            <input id="family-edit-household" type="number" inputmode="numeric" min="1" max="30" />
+          </label>
+          <label class="field">
+            <span class="field-label">連絡先</span>
+            <input id="family-edit-contact" type="text" placeholder="電話番号など" />
+          </label>
+          <label class="field">
+            <span class="field-label">住所</span>
+            <input id="family-edit-address" type="text" placeholder="町名・番地など" />
+          </label>
+          <p class="form-error" hidden></p>
+          <button type="submit" class="button button-primary">保存する</button>
+        </form>
+
+        <div class="card">
+          <h2 class="card-title">居場所の履歴</h2>
+          <ul id="family-record-history" class="list"></ul>
+        </div>
+        <button id="family-record-back" type="button" class="back-button"><span data-icon="arrow-left"></span><span>家族の記録の一覧に戻る</span></button>
+      </section>
+
+      <!-- 25. 家族を招く・外す（ご本人だけ。family.js） -->
+      <section id="screen-family-members" class="screen screen-medium" hidden>
+        <h1 class="title">家族とつなぐ</h1>
+        <p class="note">
+          招待コードをご家族に渡すと、ご家族があなたの記録（お名前・居場所など）を見て直せます。
+          健康・介護の情報、相談、受けられる支援は見えません。
+        </p>
+        <div class="card">
+          <h2 class="card-title">招待コード</h2>
+          <p class="note">コードは1回だけ使え、7日で切れます。ご家族だけに渡してください。</p>
+          <button id="family-invite-issue" type="button" class="button button-primary">
+            招待コードを出す
+          </button>
+          <div id="family-invite-box" class="code-card" hidden>
+            <p id="family-invite-code" class="code-display"></p>
+            <p id="family-invite-expires" class="note"></p>
+            <p class="note">この画面を離れると、もう一度は表示できません。</p>
+          </div>
+        </div>
+        <div class="card">
+          <h2 class="card-title">つながっているご家族</h2>
+          <ul id="family-members" class="list"></ul>
+          <p id="family-members-empty" class="note" hidden>まだつながっているご家族はいません。</p>
+        </div>
+        <button class="back-button back-to-home" type="button"><span data-icon="arrow-left"></span><span>ホームに戻る</span></button>
+      </section>
+    </main>
+
+    <!-- 登録が済んだ後だけ出す。立場に応じたタブを app.js が作る（要望3） -->
+    <nav id="tabbar" class="tabbar" hidden></nav>
+
+    <!-- 確かめの枠（使いやすさの改修の計画.md 4-2の6。ui.js の confirmDialog） -->
+    <dialog id="confirm-dialog" class="dialog" aria-labelledby="confirm-message">
+      <p id="confirm-message" class="dialog-message"></p>
+      <div class="dialog-actions">
+        <button id="confirm-cancel" type="button" class="button">やめる</button>
+        <button id="confirm-ok" type="button" class="button button-primary">はい</button>
+      </div>
+    </dialog>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
